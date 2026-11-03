@@ -1,6 +1,6 @@
 {
   "name": "adb-kit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Desktop tool to mirror, control and debug Android devices over ADB",
   "main": "./out/main/index.js",
   "private": true,

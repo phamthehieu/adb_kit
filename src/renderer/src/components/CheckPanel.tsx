@@ -63,7 +63,7 @@ function AppLocaleRow({ serial, sdk }: { serial: string; sdk: number }) {
       setNote({ text: (e as Error).message, bad: true })
     }
   }
-  if (sdk && sdk < 33) return <span className="muted">Cần Android 13+ (máy đang là API {sdk}). Máy cũ: dùng "Bố cục phải-sang-trái" và đổi ngôn ngữ cả máy trong Cài đặt.</span>
+  if (sdk && sdk < 33) return <div className="muted ck-hint">Cần Android 13+ (máy đang là API {sdk}). Máy cũ: dùng "Bố cục phải-sang-trái" và đổi ngôn ngữ cả máy trong Cài đặt.</div>
   return (
     <div className="ck-line">
       <PackagePicker serial={serial} value={pkg} onChange={setPkg} placeholder="App…" style={{ width: 220 }} />

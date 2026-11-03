@@ -841,3 +841,71 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 0 4px; border-radius: 
 .ex-stats .bad b { color: var(--err); }
 .ex-stats .warn b { color: var(--warn); }
 .ex-now { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+
+/* ---------- responsive: side panels are often narrow (phone + panel side by side) ---------- */
+.panel.wide { container-type: inline-size; }
+.mini-head { flex-wrap: wrap; row-gap: 4px; }
+.mini-head > b { white-space: nowrap; }
+.mini-head > .muted { flex: 1 1 160px; min-width: 0; }
+.ck-grid { grid-template-columns: minmax(96px, 150px) minmax(0, 1fr); }
+.ck-grid > * { min-width: 0; }
+.ck-seg { flex-wrap: wrap; max-width: 100%; }
+.ck-seg button { white-space: nowrap; }
+.mini-head .ck-seg { flex: none; }
+.gps-tools > .input { flex: 1 1 170px; width: auto !important; min-width: 0; }
+.gps-search { min-width: 0; flex: 2 1 240px; }
+.gps-foot .muted { min-width: 0; }
+.ck-line > .muted { min-width: 0; }
+.bug-actions { flex-wrap: wrap; row-gap: 6px; }
+.bug-actions > .muted { min-width: 0; flex: 1 1 200px; }
+.otp-row, .acc-row, .link-row { flex-wrap: wrap; row-gap: 4px; }
+.acc-t { min-width: 140px; }
+
+@container (max-width: 600px) {
+  /* Label above its controls instead of a fixed label column. */
+  .ck-grid { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .ck-grid > span { margin-top: 8px; color: var(--fg); font-weight: 600; font-size: 11.5px; }
+  .ck-grid > span:first-child { margin-top: 0; }
+  .acc-form { grid-template-columns: 1fr 1fr; }
+  .acc-form > button { grid-column: span 2; justify-self: end; }
+  .help-toc { flex-basis: 180px; }
+  .help-item span { display: none; }
+  .help-body { padding: 12px 14px 20px; }
+  .help-table th { width: 40%; }
+  .dt-files { flex-basis: 170px; }
+  .tm-row { grid-template-columns: 104px 1fr 56px; gap: 6px; }
+  .link-act { display: none; }
+  .mini-table th, .mini-table td { padding: 5px 6px; }
+  .mini-table td { white-space: normal; }
+  .mini-app { max-width: 100%; }
+  .ex-stats { gap: 14px; }
+  .ex-stats b { font-size: 18px; }
+}
+@container (max-width: 440px) {
+  .help-toc { flex-basis: 150px; }
+  .dt-split { flex-direction: column; }
+  .dt-files { flex: 0 0 auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .mini-body, .ck-body, .dt-body { padding: 8px; }
+  .mini-sec { padding: 8px 10px; }
+}
+
+/* ---------- responsive, round 2 (checked on screenshots at ~400 px panels) ---------- */
+.footer > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.footer > span:first-child { flex: 0 1 auto; }
+.panel-head { flex-wrap: wrap; row-gap: 6px; }
+.auto-log .ll { flex-wrap: wrap; row-gap: 2px; column-gap: 10px; }
+.auto-log .ll a { white-space: nowrap; }
+.help-title { flex-wrap: wrap; row-gap: 6px; }
+.help-title .iconbtn { white-space: nowrap; }
+.mini-table td.mono, .mini-act { white-space: nowrap; }
+@container (max-width: 600px) {
+  .help-title h2 { font-size: 15px; }
+  .mini-table.apps .mini-app .u { white-space: normal; word-break: break-all; }
+  .mini-table.apps th:nth-child(4), .mini-table.apps td:nth-child(4) { display: none; }
+  .mini-table.timings th:nth-child(3), .mini-table.timings td:nth-child(3),
+  .mini-table.timings th:nth-child(4), .mini-table.timings td:nth-child(4),
+  .mini-table.timings th:nth-child(5), .mini-table.timings td:nth-child(5) { display: none; }
+  .mini-tpl { flex-wrap: wrap; }
+  .mini-tpl .input { flex: 1 1 100%; }
+}
+.ck-hint { font-size: 11.5px; line-height: 1.45; }

@@ -334,7 +334,7 @@ export function MiniAppPanel({ serial, onWatchNetwork }: { serial: string; onWat
           {!pkg && <div className="steps-empty">Chọn super app để xem các miniapp nó đã tải.</div>}
           {list?.note && <div className="steps-empty">{list.note}</div>}
           {apps.length > 0 && (
-            <table className="mini-table">
+            <table className="mini-table apps">
               <thead>
                 <tr>
                   <th>Miniapp</th>
@@ -400,7 +400,7 @@ export function MiniAppPanel({ serial, onWatchNetwork }: { serial: string; onWat
           )}
           {lastTiming && <TimingView t={lastTiming.t} name={lastTiming.name} />}
           {timings.length > 0 && (
-            <table className="mini-table">
+            <table className="mini-table timings">
               <thead>
                 <tr>
                   <th>Lúc</th>

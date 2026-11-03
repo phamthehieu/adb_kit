@@ -228,7 +228,7 @@ function AppDataTab({ serial }: { serial: string }) {
         })}
       </div>
       <div className="dt-view">
-        {!sel && <div className="steps-empty">Chọn một file bên trái. SharedPreferences sửa được (app sẽ được đóng khi lưu); database và MMKV chỉ xem.</div>}
+        {!sel && <div className="steps-empty">Chọn một file trong danh sách. SharedPreferences sửa được (app sẽ được đóng khi lưu); database và MMKV chỉ xem.</div>}
         {sel?.kind === 'prefs' && <PrefsView key={sel.path} serial={serial} pkg={pkg} file={sel} />}
         {sel?.kind === 'db' && <DbView key={sel.path} serial={serial} pkg={pkg} file={sel} />}
         {sel?.kind === 'mmkv' && <MmkvView key={sel.path} serial={serial} pkg={pkg} file={sel} />}

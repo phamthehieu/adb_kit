@@ -68,9 +68,20 @@ export function MapPicker({ center, zoom = 14, a, b, here, onPick, onView, heigh
 
   useLayoutEffect(() => {
     const el = box.current!
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }))
+    const measure = (): void => setSize((s) => (s.w === el.clientWidth && s.h === el.clientHeight ? s : { w: el.clientWidth, h: el.clientHeight }))
+    measure()
+    const ro = new ResizeObserver(measure)
     ro.observe(el)
-    return () => ro.disconnect()
+    // Fallbacks: panels resize via splitters / container queries and the observer can lag.
+    window.addEventListener('resize', measure)
+    el.addEventListener('pointerenter', measure)
+    const t = setInterval(measure, 1000)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+      el.removeEventListener('pointerenter', measure)
+      clearInterval(t)
+    }
   }, [])
 
   // External jumps (search result, preset place): recentre.
