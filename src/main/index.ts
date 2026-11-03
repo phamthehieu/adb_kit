@@ -9,7 +9,9 @@ import { ScrcpySession } from './scrcpy'
 import { CrashWatcher, Runner, setBaselinesRoot, type Crash } from './runner'
 import { parseCli, runCli } from './cli'
 import { dumpUi } from './ui'
-import { SuiteRunner, readScript, readSuite, writeManualResults, writeSuite } from './suite'
+import { SuiteRunner, readScript, readSuite, templateFor, writeManualResults, writeSuite } from './suite'
+import { ReqDocStore, exportCases, fillValue, scanScreen } from './reqdoc'
+import { kbktNameOf, type ReqCase } from '../shared/reqdoc'
 import { readKbkt } from './kbkt'
 import { WebViewInspector } from './webview'
 import { ChuckerWatcher } from './chucker'
@@ -511,6 +513,35 @@ function registerDataIpc(): void {
   ipcMain.handle('device:type', (_e, serial: string, text: string) => shell(serial, `input text ${q(text.replace(/ /g, '%s'))}`))
 }
 
+/* BA requirement documents: import, browse, check the phone screen against them, export KBKT. */
+function registerReqDocIpc(): void {
+  const store = new ReqDocStore(join(app.getPath('userData'), 'reqdocs'))
+  ipcMain.handle('req:import', async (_e, path?: string) => {
+    if (!path) {
+      const r = await dialog.showOpenDialog({ title: 'Chọn tài liệu yêu cầu (TLNV / MTYCTD)', properties: ['openFile'], filters: [{ name: 'Word', extensions: ['docx'] }] })
+      if (r.canceled || !r.filePaths[0]) return null
+      path = r.filePaths[0]
+    }
+    return store.import(path)
+  })
+  ipcMain.handle('req:list', () => store.list())
+  ipcMain.handle('req:get', (_e, id: string) => store.get(id))
+  ipcMain.handle('req:remove', (_e, id: string) => store.remove(id))
+  ipcMain.handle('req:image', (_e, id: string, name: string) => store.image(id, name))
+  ipcMain.handle('req:scan', (_e, serial: string) => scanScreen(serial))
+  ipcMain.handle('req:fill', (_e, serial: string, value: string, label?: string) => fillValue(serial, value, label))
+  ipcMain.handle('req:export-kbkt', async (_e, id: string, cases: ReqCase[], meta: { template: string; code: string; author: string; tester: string }) => {
+    const doc = store.get(id)
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const dir = join(reportsRoot(), `${stamp}_KBKT-TU-TAI-LIEU`)
+    mkdirSync(dir, { recursive: true })
+    const template = templateFor({ template: meta.template } as Suite, templatesDir)
+    const out = await exportCases(cases, join(dir, kbktNameOf(doc.file)), template, { title: doc.title, code: meta.code, author: meta.author, tester: meta.tester })
+    eShell.showItemInFolder(out)
+    return out
+  })
+}
+
 function registerJiraIpc(): void {
   ipcMain.handle('jira:get', () => getJira())
   ipcMain.handle('jira:set', (_e, conf: JiraConf, token?: string) => setJira(conf, token))
@@ -537,6 +568,7 @@ function registerBugIpc(): void {
   registerCrashIpc()
   registerDataIpc()
   registerRecordIpc()
+  registerReqDocIpc()
   ipcMain.handle('bug:snap', (_e, serial: string) => snapBug(serial, reportsRoot()))
   ipcMain.handle('bug:save', (_e, id: string, input: BugInput) => saveBug(id, input))
   ipcMain.handle('bug:discard', (_e, id: string) => discardBug(id))

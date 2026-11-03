@@ -154,6 +154,45 @@ Lưu ý:
 - **Xu hướng kết quả** (cuối tab Tự động test): `xu-huong.html` gom mọi `report.json` 30 ngày theo kịch bản, gồm tỉ lệ đạt, dải 20 lần gần nhất (bấm để mở báo cáo), test **chập chờn** (đổi đạt/lỗi ≥ 2 lần trong 10 lần gần nhất) và kịch bản luôn lỗi.
 - **Bố cục phải-sang-trái** (Soát UI, mọi Android) và **ngôn ngữ riêng của app** (Android 13+, gồm en-XA chữ dài giả và ar-XB RTL giả).
 
+## Tài liệu yêu cầu (BA): testcase và soát màn hình theo tài liệu
+
+Tab **Tài liệu YC** nhận file Word của BA (TLNV / MTYCTD `.docx`, kéo thả hoặc "Nhập .docx").
+
+- **Đọc tài liệu.** Bảng được nhận diện theo dòng tiêu đề, không theo vị trí. Các dạng nhận được:
+  - TLNV: `# | Title | Component Type | Editable | Mandatory | Description` và API `Danh mục | Nội dung chi tiết` (Mục đích / Input / Output / Xử lý theo Bước, nhánh Hợp lệ / Không hợp lệ / Lỗi).
+  - MTYCTD: `STT | Tên | Loại Control | Bắt buộc | Độ dài tối đa | Read only | Mô tả`, `Tham số | Kiểu dữ liệu | Bắt buộc | Mô tả | Map …`, `Step | Description`, `Status Code`, khối `curl` (chỉ giữ đường dẫn, bỏ host / query / header).
+- **Cách gom màn hình.**
+  - Màn hình là tiêu đề sâu nhất không phải tiêu đề chung ("Thay đổi về giao diện", "Xử lý sự kiện…", "Mapping API").
+  - Tiêu đề "Block / Header…" được gộp vào màn hình làm một phần (section).
+  - Màn trùng tên (Android / iOS, cá nhân / doanh nghiệp) được thêm tên nhánh để phân biệt.
+  - Ảnh mockup trong từng mục được lấy ra để xem cạnh bảng.
+- **Quy tắc trường.** ADB Kit rút quy tắc từ mô tả: tối đa / tối thiểu N ký tự, `dd/MM/yyyy`, email, SĐT, chỉ số, không ký tự đặc biệt, disable / không cho sửa, danh sách lựa chọn, giá trị mặc định. Khi tài liệu tự mâu thuẫn (cột Editable = No nhưng mô tả "cho phép chỉnh sửa"), ADB Kit đánh dấu ⚠ để hỏi lại BA.
+- **Testcase → KBKT.** Mỗi màn hình sinh các nhóm ca:
+  - giao diện;
+  - bỏ trống trường bắt buộc;
+  - giá trị biên (N và N+1 ký tự, sai định dạng);
+  - lựa chọn và mặc định;
+  - trạng thái disable;
+  - từng nhánh "Nếu… thì…" hoặc "Tab chọn… thì…".
+
+  Mỗi API sinh ca: thiếu tham số bắt buộc, từng nhánh của từng bước (bỏ nhánh chỉ "thực hiện bước N"), và trả về thành công. Lọc, bỏ chọn rồi xuất theo mẫu BES / BCCS; tên file là tên tài liệu đổi tiền tố thành `KBKT`.
+- **Soát trên máy.**
+  - Quét đọc chữ và ô nhập của màn hình đang mở: native qua uiautomator, miniapp qua DevTools WebView. Chỉ đọc nhãn, maxlength, khoá / mở, không đọc giá trị đã nhập.
+  - ADB Kit đoán màn trong tài liệu (xếp hạng theo số thành phần thấy × tỉ lệ) rồi báo thành phần thiếu, ô bị khoá sai, maxlength lệch tài liệu.
+- **Giá trị thử.** Mỗi ô nhập có nút điền sẵn: đúng giới hạn, vượt 1, email sai, ngày không tồn tại, chỉ khoảng trắng…
+  - Trong WebView, giá trị được điền vào đúng ô có nhãn đó, cắt theo maxlength như khi gõ thật, và phát sự kiện input / change / blur để validate chạy.
+  - Ngoài WebView, giá trị được gõ qua bàn phím ảo; chữ có dấu thì dán qua clipboard.
+- **Đối chiếu API với tài liệu** (tab API › "Bắt API"):
+  - ADB Kit theo dõi API của app đang mở và ghép từng API trong tài liệu với một đường dẫn thật. Việc ghép tự động dựa vào đường dẫn hoặc curl trong tài liệu, hoặc tên dạng `find-staff`; chọn tay cũng được và ADB Kit sẽ nhớ.
+  - Với lần gọi thật gần nhất (bỏ qua các lần đã giả lập), ADB Kit báo: tham số bắt buộc app không gửi, trường trả về sai kiểu (`Number` nhưng nhận chuỗi…), trường chưa thấy, trường app gửi / nhận thêm mà tài liệu không ghi, phương thức lệch.
+  - TLNV chỉ ghi tên tiếng Việt ("Số giấy tờ"), nên cần ghép một lần với trường thật (`idNo`).
+- **Giả lập nhánh lỗi**:
+  - Mỗi API có sẵn các nút theo tài liệu: từng nhánh lỗi của từng bước (bỏ nhánh chỉ "thực hiện bước N"), từng mã lỗi ở bảng Status Code, `success = false`, HTTP 500 / 401, mất mạng, chậm 15 giây.
+  - Phản hồi giả dùng đúng tên trường của tài liệu (`success` / `code` / `message`).
+  - Kèm theo là dòng kỳ vọng lấy từ tài liệu, gồm cả xử lý của màn hình (ví dụ "Nếu success = false thì hiển thị popup…").
+  - Chỉ áp cho API gọi từ WebView / miniapp, tự hết sau 15 phút, và được gỡ khi dừng theo dõi hoặc đóng tab.
+- Tài liệu đã phân tích được lưu trong `%APPDATA%/adb-kit/reqdocs`, không gửi đi đâu.
+
 ## Hướng dẫn trong app
 
 Nút **Hướng dẫn** trên thanh công cụ (đọc được cả khi chưa cắm điện thoại):
@@ -280,6 +319,10 @@ Sau khi tạo báo cáo lỗi (F8), bấm **Tạo ticket Jira**: ADB Kit tạo t
 | `src/renderer/src/components/ExplorePanel.tsx`, `MapPicker.tsx` | tab Tự khám phá, bản đồ chọn vị trí |
 | `src/renderer/src/components/DataPanel.tsx`, `MultiRunBox.tsx` | tab Dữ liệu, khung chạy nhiều máy |
 | `src/renderer/src/components/HelpPanel.tsx`, `Tour.tsx` | tab Hướng dẫn và lớp phủ "Chỉ cho tôi" |
+| `src/main/reqdoc.ts` | đọc tài liệu BA (.docx), lưu trữ, quét màn hình / điền giá trị thử, xuất KBKT |
+| `src/shared/reqdoc.ts` | mô hình tài liệu, quy tắc trường, giá trị biên, sinh testcase, so màn hình với tài liệu |
+| `src/shared/reqapi.ts` | đối chiếu API thật với tài liệu, kịch bản giả lập nhánh lỗi |
+| `src/renderer/src/components/ReqPanel.tsx`, `ReqApiLive.tsx` | tab Tài liệu YC, phần API trên máy |
 | `src/preload/index.ts` | API `window.api` cho renderer |
 | `src/renderer/src/lib/control.ts` | đóng gói nhị phân các lệnh điều khiển của scrcpy |
 | `src/renderer/src/lib/player.ts` | giải mã H.264 và vẽ lên canvas |

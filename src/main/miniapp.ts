@@ -129,7 +129,7 @@ export async function closeForwards(): Promise<void> {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 /** Evaluate an expression in a page through a short-lived DevTools connection. */
-async function evalIn(serial: string, socket: string, pageId: string, expression: string): Promise<unknown> {
+export async function evalIn(serial: string, socket: string, pageId: string, expression: string): Promise<unknown> {
   const port = await portFor(serial, socket)
   const ws = new WebSocket(`ws://127.0.0.1:${port}/devtools/page/${pageId}`)
   try {

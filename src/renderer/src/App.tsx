@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, Bot, Bug, Database, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
+import { AppWindow, Bot, Bug, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
 import { ScreenView } from './components/ScreenView'
@@ -17,6 +17,7 @@ import { describeStep } from '@shared/automation'
 import type { CrashEvent } from '../../preload'
 import { CheckPanel } from './components/CheckPanel'
 import { DataPanel } from './components/DataPanel'
+import { ReqPanel } from './components/ReqPanel'
 import { HelpPanel } from './components/HelpPanel'
 import { Tour } from './components/Tour'
 import { TOPICS, type TourStep } from './lib/help'
@@ -25,9 +26,9 @@ import { InstallPanel, type InstallRecord } from './components/InstallPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Splitter } from './components/Splitter'
 
-type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data'
+type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req'
 const LEFT_PANELS: Panel[] = ['files', 'perm']
-const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data']
+const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req']
 type Status = { text: string; error?: boolean; path?: string } | null
 
 const DEFAULT_OPTS: MirrorOptions = { maxSize: 1280, bitRate: 8_000_000, maxFps: 60 }
@@ -223,6 +224,7 @@ export function App() {
         {tool('mini', <AppWindow size={13} />, 'Miniapp')}
         {tool('check', <ScanEye size={13} />, 'Soát UI')}
         {tool('data', <Database size={13} />, 'Dữ liệu')}
+        {tool('req', <FileText size={13} />, 'Tài liệu YC')}
         <button
           className={`iconbtn ${panel === 'help' ? 'on' : ''}`}
           data-tour="tool-help"
@@ -347,6 +349,7 @@ export function App() {
               </ErrorBoundary>
             )}
             {panel === 'data' && <ErrorBoundary key="data" name="Panel Dữ liệu" className="panel wide"><DataPanel serial={device.serial} /></ErrorBoundary>}
+            {panel === 'req' && <ErrorBoundary key="req" name="Panel Tài liệu yêu cầu" className="panel wide"><ReqPanel serial={device.serial} /></ErrorBoundary>}
             {panel === 'check' && <ErrorBoundary key="check" name="Panel Soát UI" className="panel wide"><CheckPanel serial={device.serial} /></ErrorBoundary>}
             {panel === 'mini' && (
               <ErrorBoundary key="mini" name="Panel Miniapp" className="panel wide">

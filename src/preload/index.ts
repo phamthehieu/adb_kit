@@ -31,6 +31,7 @@ import type { JiraCheck, JiraConf, JiraIssue, JiraState } from '../shared/jira'
 import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '../shared/appdata'
 import type { AppLink, AppScreen } from '../main/applinks'
 import type { ExploreOptions, ExploreProgress } from '../main/explore'
+import type { ReqCase, ReqDoc, ReqDocInfo, ScreenScan } from '../shared/reqdoc'
 
 export interface CrashEvent {
   serial: string
@@ -236,6 +237,19 @@ const api = {
     openLink: (serial: string, url: string, pkg?: string): Promise<string> => invoke('mini:open-link', serial, url, pkg),
     measure: (serial: string, pkg: string, url: string, appId?: string, cold?: boolean): Promise<OpenTiming> =>
       invoke('mini:measure', serial, pkg, url, appId, cold)
+  },
+  /** BA requirement documents (TLNV / MTYCTD .docx). */
+  req: {
+    /** Without a path: pick the .docx in a dialog (null = cancelled). */
+    import: (path?: string): Promise<ReqDoc | null> => invoke('req:import', path),
+    list: (): Promise<ReqDocInfo[]> => invoke('req:list'),
+    get: (id: string): Promise<ReqDoc> => invoke('req:get', id),
+    remove: (id: string): Promise<void> => invoke('req:remove', id),
+    image: (id: string, name: string): Promise<string> => invoke('req:image', id, name),
+    scan: (serial: string): Promise<ScreenScan> => invoke('req:scan', serial),
+    fill: (serial: string, value: string, label?: string): Promise<string> => invoke('req:fill', serial, value, label),
+    exportKbkt: (id: string, cases: ReqCase[], meta: { template: string; code: string; author: string; tester: string }): Promise<string> =>
+      invoke('req:export-kbkt', id, cases, meta)
   },
   openPath: (path: string): Promise<string> => invoke('os:open', path),
 

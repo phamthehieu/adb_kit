@@ -5,7 +5,7 @@
  */
 
 /** Panels a tour step can open (same ids as App's panels). */
-export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data'
+export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req'
 
 /** Where a step points: a CSS selector, or a button / label whose text contains `text`. */
 export type Target = string | { text: string; within?: string }
@@ -312,6 +312,63 @@ export const TOPICS: HelpTopic[] = [
     tour: [
       { target: tool('perm'), panel: 'perm', title: 'Quyền', body: 'Chọn app để bật/tắt từng quyền.' },
       { target: { text: 'Thu hồi tất cả' }, panel: 'perm', title: 'Như mới cài', body: 'Thu hồi mọi quyền để test lại luồng xin quyền lần đầu.' }
+    ]
+  },
+  {
+    id: 'req',
+    group: 'Kiểm thử',
+    title: 'Tài liệu yêu cầu (BA) → testcase & soát màn hình',
+    summary: 'Nhập file Word TLNV / MTYCTD: xem quy tắc từng trường, API, sinh KBKT, soát màn hình trên máy theo tài liệu',
+    when: [
+      'BA gửi tài liệu mô tả (TLNV / MTYCTD .docx) và bạn cần viết testcase nhanh.',
+      'Đang test một màn hình, muốn biết trường nào bắt buộc, tối đa bao nhiêu ký tự, định dạng gì — không phải lật tài liệu 50 trang.',
+      'Muốn kiểm tra app làm đúng tài liệu: đủ thành phần, ô khoá / cho sửa, maxlength đúng.',
+      'Dev muốn xem nhanh API của màn hình: tham số bắt buộc, các nhánh xử lý, mã lỗi.'
+    ],
+    steps: [
+      'Mở tab Tài liệu YC, bấm Nhập .docx (hoặc kéo thả file Word vào bảng). File .doc cũ: mở bằng Word → Lưu thành .docx.',
+      'Màn hình: chọn màn ở cột trái để xem từng thành phần, loại, cho sửa, bắt buộc và quy tắc (≤ 20 ký tự, dd/MM/yyyy, email…). Bấm một dòng để xem mô tả gốc.',
+      'Dấu ⚠ = tài liệu tự mâu thuẫn (ví dụ cột Editable = No nhưng mô tả ghi “cho phép chỉnh sửa”) — nên hỏi lại BA.',
+      'Testcase: lọc theo loại (Giao diện / Validate trường / Xử lý / API), bỏ chọn ca không cần, chọn mẫu BES hoặc BCCS, nhập tiền tố mã, bấm Xuất KBKT.',
+      'Soát trên máy: mở đúng màn hình trên điện thoại, bấm Quét màn hình — ADB Kit đoán màn trong tài liệu và đánh dấu thành phần thấy / không thấy, ô khoá sai, maxlength lệch.',
+      'Giá trị thử: ở dòng một ô nhập, bấm nút như “21 ký tự (vượt 1)” để điền thẳng vào ô đó trên điện thoại, rồi xem app có chặn / báo lỗi đúng không.',
+      'API: bấm Bắt API (theo dõi app đang mở), thao tác trên app, rồi chọn API trong tài liệu và ô “API trên máy” (ADB Kit tự ghép nếu tài liệu có đường dẫn / tên kiểu find-staff). Bảng đối chiếu cho biết tham số bắt buộc app không gửi, trường trả về sai kiểu, trường thừa / chưa thấy.',
+      'Tài liệu TLNV chỉ ghi tên tiếng Việt (“Số giấy tờ”): chọn một lần trường thật tương ứng (idNo…) ở ô “ghép với trường…”, ADB Kit nhớ cho lần sau.',
+      'Giả lập nhánh lỗi: bấm một nhánh (Bước 3: Không hợp lệ, success = false, HTTP 500, Mất mạng, Chậm 15 giây…) → app nhận phản hồi giả cho đúng API đó; thao tác lại và so với dòng “kỳ vọng” lấy từ tài liệu. Bấm lại hoặc Bỏ giả lập để tắt; dừng theo dõi / đóng tab cũng tự gỡ.'
+    ],
+    buttons: [
+      ['Nhập .docx', 'Đọc tài liệu Word; lưu bản phân tích trên máy này (không gửi đi đâu).'],
+      ['Màn hình / API / Testcase / Soát trên máy', 'Bốn góc nhìn của cùng tài liệu.'],
+      ['Xuất KBKT', 'Ghi file Excel theo mẫu KBKT (tên file = tên tài liệu đổi tiền tố thành KBKT) vào thư mục báo cáo và mở thư mục.'],
+      ['Quét màn hình', 'Đọc chữ và ô nhập đang hiện (giao diện native + WebView miniapp). Không đọc giá trị người dùng đã nhập.'],
+      ['✓ / ✗ giá trị thử', '✓ = tài liệu nói phải chấp nhận, ✗ = phải chặn hoặc báo lỗi.'],
+      ['Bắt API (tab API)', 'Theo dõi API của app đang mở trên điện thoại khi bảng này mở (giống tab Mạng / API).'],
+      ['API trên máy', 'Đường dẫn thật ứng với API trong tài liệu; “tự ghép” = ADB Kit đoán, chọn lại nếu sai.'],
+      ['✓ / ✗ / ⚠ / – (đối chiếu)', 'Khớp / app không gửi tham số bắt buộc / sai kiểu so với tài liệu / chưa thấy trong lần trả về này.'],
+      ['Giả lập nhánh lỗi', 'Phản hồi giả theo nhánh lỗi tài liệu mô tả (dùng đúng tên trường success / code / message nếu tài liệu có), tự hết sau 15 phút.']
+    ],
+    example: {
+      title: 'Test màn “Nhập thông tin” của miniapp MySign',
+      steps: [
+        'Nhập file TLNV_85714 … .docx → tab Màn hình hiện 7 màn, 9 API.',
+        'Trên điện thoại mở miniapp tới màn Nhập thông tin, sang tab Soát trên máy, bấm Quét màn hình → “Bước 2. Nhập thông tin” 80%.',
+        '“Số giấy tờ” báo “tài liệu: không cho sửa, nhưng ô đang cho nhập” → ghi bug (F8).',
+        'Ở “Nơi cấp” bấm “51 ký tự (vượt 1)” → ô chỉ nhận 50 ký tự = đúng tài liệu.',
+        'Sang tab Testcase, Xuất KBKT → gửi file cho trưởng nhóm.'
+      ]
+    },
+    faq: [
+      ['Không màn nào khớp khi quét', 'Màn hình đang mở có thể chưa có trong tài liệu, hoặc chữ trên app khác tài liệu. Chọn tay màn ở ô “Màn hình trong tài liệu”.'],
+      ['“App không mở WebView gỡ lỗi được”', 'Miniapp trên bản release thường tắt gỡ lỗi WebView: dùng bản staging / debug. Phần native vẫn soát được.'],
+      ['Giả lập không có tác dụng', 'Chỉ áp được cho API gọi từ WebView / miniapp. App native (API đọc qua Chucker) chỉ đối chiếu được.'],
+      ['Đối chiếu báo “phản hồi bị cắt”', 'Phản hồi quá dài nên chỉ giữ phần đầu: chỉ kiểm tra được tên trường xuất hiện ở đó.'],
+      ['Nút điền giá trị có dấu không chạy', 'Khi không tìm thấy ô trong WebView, ADB Kit dán qua clipboard của màn hình phản chiếu: chạm vào ô cần điền trước.'],
+      ['Thiếu màn hoặc API', 'ADB Kit nhận bảng theo dòng tiêu đề (Title/Component Type, Tên/Loại Control, Tham số/Kiểu dữ liệu, Danh mục/Nội dung chi tiết, Step/Description). Bảng kiểu khác được liệt kê ở dòng “Bỏ qua … bảng”.']
+    ],
+    tour: [
+      { target: tool('req'), panel: 'req', title: 'Tài liệu yêu cầu', body: 'Nhập file Word của BA để xem quy tắc từng trường, API và sinh testcase.' },
+      { target: { text: 'Nhập .docx' }, panel: 'req', title: 'Nhập tài liệu', body: 'Chọn file TLNV / MTYCTD (.docx) hoặc kéo thả vào bảng.' },
+      { target: '.rq-head .seg', panel: 'req', title: 'Bốn góc nhìn', body: 'Màn hình, API, Testcase (xuất KBKT) và Soát trên máy (so màn hình đang mở với tài liệu).' }
     ]
   },
   {
