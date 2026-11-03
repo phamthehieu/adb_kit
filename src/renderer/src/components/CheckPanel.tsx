@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, MapPin, RotateCcw, ScanEye, SlidersHorizontal, Wand2 } from 'lucide-react'
 import type { ConfKey, DevConfig, IssueKind, UiIssue } from '@shared/devconf'
 import { autoStore } from '../lib/automation'
-import { lintUi } from '../lib/uiLint'
+import { lintUi } from '@shared/uiLint'
 import { MapPicker, type LatLng } from './MapPicker'
+import { PackagePicker } from './PackagePicker'
 
 const KIND: Record<IssueKind, string> = {
   target: 'Vùng bấm nhỏ',
@@ -39,6 +40,42 @@ async function screenImage(serial: string): Promise<ImageData | null> {
   } catch {
     return null
   }
+}
+
+const LOCALES: [string, string][] = [
+  ['', 'Theo máy'],
+  ['vi-VN', 'Tiếng Việt'],
+  ['en-US', 'English'],
+  ['en-XA', 'Chữ dài giả (en-XA)'],
+  ['ar-XB', 'Phải-sang-trái giả (ar-XB)']
+]
+
+/** Per-app language (Android 13+), incl. pseudo-locales that stretch text / mirror layout. */
+function AppLocaleRow({ serial, sdk }: { serial: string; sdk: number }) {
+  const [pkg, setPkg] = useState(() => localStorage.getItem('dataPkg') ?? localStorage.getItem('netPkg') ?? '')
+  const [loc, setLoc] = useState('')
+  const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null)
+  const apply = async (): Promise<void> => {
+    try {
+      const now = await window.api.conf.appLocale(serial, pkg, loc)
+      setNote({ text: `Đã đặt: ${now || 'theo máy'} — app tự tải lại giao diện. Giả lập en-XA / ar-XB chỉ có tác dụng nếu app bật pseudoLocalesEnabled (thường có ở bản debug).` })
+    } catch (e) {
+      setNote({ text: (e as Error).message, bad: true })
+    }
+  }
+  if (sdk && sdk < 33) return <span className="muted">Cần Android 13+ (máy đang là API {sdk}). Máy cũ: dùng "Bố cục phải-sang-trái" và đổi ngôn ngữ cả máy trong Cài đặt.</span>
+  return (
+    <div className="ck-line">
+      <PackagePicker serial={serial} value={pkg} onChange={setPkg} placeholder="App…" style={{ width: 220 }} />
+      <select className="input" value={loc} onChange={(e) => setLoc(e.target.value)}>
+        {LOCALES.map(([v, l]) => (
+          <option key={v} value={v}>{l}</option>
+        ))}
+      </select>
+      <button className="iconbtn" disabled={!pkg} onClick={() => void apply()}>Áp dụng</button>
+      {note && <span className={`ck-note ${note.bad ? 'bad' : ''}`}>{note.text}</span>}
+    </div>
+  )
 }
 
 const PLACES: { name: string; lat: number; lng: number }[] = [
@@ -424,7 +461,12 @@ export function CheckPanel({ serial }: { serial: string }) {
                 <label className="mini-check">
                   <input type="checkbox" checked={conf.showTouches} disabled={!!busy} onChange={(e) => void set('showTouches', e.target.checked ? '1' : '0', e.target.checked ? 'hiện điểm chạm' : 'ẩn điểm chạm')} /> Hiện điểm chạm
                 </label>
+                <label className="mini-check" title="Lật bố cục như tiếng Ả Rập / Do Thái — tìm chỗ căn lề cứng, icon mũi tên sai chiều">
+                  <input type="checkbox" checked={conf.rtl} disabled={!!busy} onChange={(e) => void set('rtl', e.target.checked ? '1' : '0', e.target.checked ? 'bố cục phải-sang-trái' : 'bố cục trái-sang-phải')} /> Bố cục phải-sang-trái
+                </label>
               </div>
+              <span>Ngôn ngữ của app</span>
+              <AppLocaleRow serial={serial} sdk={conf.sdk} />
             </div>
           )}
           {note && <div className={`ck-note ${note.bad ? 'bad' : ''}`}>{note.text}</div>}

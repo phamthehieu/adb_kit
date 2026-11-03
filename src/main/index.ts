@@ -26,8 +26,11 @@ import { OtpWatcher } from './otp'
 import { ScreenRecorder } from './recorder'
 import { MultiRun } from './multirun'
 import { compareReports } from './compare'
+import { writeTrends } from './trends'
+import { appLinks, openActivity } from './applinks'
+import { Explorer, type ExploreOptions } from './explore'
 import type { JiraConf } from '../shared/jira'
-import { cutNetwork, getConfig, restoreConfig, setConfig } from './devconf'
+import { cutNetwork, getConfig, restoreConfig, setAppLocale, setConfig } from './devconf'
 import { clearAllLocations, clearLocation, gpsActive, moveRoute, searchPlace, setLocation, setupMapRequests } from './gps'
 import type { ConfKey } from '../shared/devconf'
 import { parseCsv, type MockRule, type NetCall, type NetProfile, type RunOptions, type Script, type Suite } from '../shared/automation'
@@ -137,8 +140,24 @@ function scriptInfo(path: string): { path: string; name: string; app: string; st
 }
 
 let multiRun: MultiRun | null = null
+let explorer: Explorer | null = null
+
+function registerExploreIpc(): void {
+  ipcMain.handle('explore:start', async (_e, serial: string, pkg: string, opts: ExploreOptions) => {
+    if (runner || suiteRunner || multiRun || explorer) throw new Error('Đang có test chạy')
+    const x = new Explorer(serial, pkg, opts, (p) => send('explore:progress', p), reportsRoot())
+    explorer = x
+    try {
+      return await x.run()
+    } finally {
+      if (explorer === x) explorer = null
+    }
+  })
+  ipcMain.handle('explore:stop', () => explorer?.stop())
+}
 
 function registerSuiteIpc(): void {
+  registerExploreIpc()
   // Same suite on several phones at once.
   ipcMain.handle('suite:run-multi', async (_e, serials: string[], suite: Suite, opts: RunOptions) => {
     if (runner || suiteRunner || multiRun) throw new Error('Đang có test chạy')
@@ -348,6 +367,25 @@ function registerInspectIpc(): void {
     }
     return false
   })
+  // Recorded API answers ("bộ dữ liệu giả") as JSON files, for replay later or in scripts.
+  ipcMain.handle('net:save-mock-set', async (_e, rules: MockRule[], name: string) => {
+    mkdirSync(testsDir(), { recursive: true })
+    const r = await dialog.showSaveDialog(win!, {
+      title: 'Lưu bộ API đã ghi',
+      defaultPath: join(testsDir(), `${name.replace(/[^\w-]+/g, '_') || 'api'}.mock.json`),
+      filters: [{ name: 'Bộ API giả lập', extensions: ['json'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    writeFileSync(r.filePath, JSON.stringify(rules, null, 1))
+    return r.filePath
+  })
+  ipcMain.handle('net:open-mock-set', async () => {
+    const r = await dialog.showOpenDialog(win!, { title: 'Mở bộ API đã ghi', defaultPath: testsDir(), filters: [{ name: 'Bộ API giả lập', extensions: ['json'] }], properties: ['openFile'] })
+    if (r.canceled || !r.filePaths[0]) return null
+    const rules = JSON.parse(readFileSync(r.filePaths[0], 'utf8')) as MockRule[]
+    if (!Array.isArray(rules) || rules.some((x) => typeof x?.match !== 'string' || !x.action)) throw new Error('File không phải bộ API giả lập của ADB Kit')
+    return { path: r.filePaths[0], rules }
+  })
   ipcMain.handle('net:mocks', async (_e, rules: MockRule[]) => {
     if (!liveNet) throw new Error('Chưa theo dõi app nào')
     await liveNet.setMocks(rules)
@@ -394,6 +432,7 @@ function registerDevConfIpc(): void {
   ipcMain.handle('conf:set', (_e, serial: string, key: ConfKey, value: string) => setConfig(serial, key, value))
   ipcMain.handle('conf:restore', (_e, serial: string) => restoreConfig(serial))
   ipcMain.handle('net:cut', (_e, serial: string, seconds: number) => cutNetwork(serial, seconds))
+  ipcMain.handle('conf:app-locale', (_e, serial: string, pkg: string, locale: string) => setAppLocale(serial, pkg, locale))
   ipcMain.handle('gps:set', (_e, serial: string, lat: number, lng: number) => setLocation(serial, lat, lng))
   ipcMain.handle('gps:route', (_e, serial: string, from: [number, number], to: [number, number], seconds: number) => moveRoute(serial, from, to, seconds))
   ipcMain.handle('gps:clear', (_e, serial: string) => clearLocation(serial))
@@ -462,6 +501,8 @@ function registerDataIpc(): void {
   ipcMain.handle('data:tables', (_e, serial: string, pkg: string, path: string) => dbTables(serial, pkg, path))
   ipcMain.handle('data:query', (_e, serial: string, pkg: string, path: string, sql: string) => dbQuery(serial, pkg, path, sql))
   ipcMain.handle('data:mmkv', (_e, serial: string, pkg: string, path: string) => readMmkv(serial, pkg, path))
+  ipcMain.handle('links:list', (_e, serial: string, pkg: string) => appLinks(serial, pkg))
+  ipcMain.handle('links:open-activity', (_e, serial: string, pkg: string, activity: string) => openActivity(serial, pkg, activity))
   // OTP: start() remembers the notifications already on the phone; poll() returns new codes.
   ipcMain.handle('otp:start', (_e, serial: string) => void otpWatchers.set(serial, new OtpWatcher(serial)))
   ipcMain.handle('otp:poll', (_e, serial: string) => otpWatchers.get(serial)?.poll() ?? [])
@@ -554,6 +595,12 @@ function registerAutomationIpc(): void {
   ipcMain.handle('auto:reports-dir', () => {
     mkdirSync(reportsRoot(), { recursive: true })
     return eShell.openPath(reportsRoot())
+  })
+  ipcMain.handle('auto:trends', async () => {
+    mkdirSync(reportsRoot(), { recursive: true })
+    const file = writeTrends(reportsRoot())
+    await eShell.openPath(file)
+    return file
   })
   // Compare two runs: pick the older then the newer report folder.
   ipcMain.handle('auto:compare', async () => {

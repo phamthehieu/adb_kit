@@ -69,7 +69,7 @@ export const CAP_HOOK_SCRIPT = `(() => {
         rule = findMock(cmd, isFetch ? String(o.url || '') : '') || (isFetch ? netRule() : null)
         pending.set(m.callbackId, { id, isFetch })
         emit(isFetch
-          ? { k: 'call', id, cmd, http: { method: String(o.method || 'GET').toUpperCase(), url: String(o.url || ''), headers: o.headers || null, body: o.body == null ? undefined : (o.bodyBase64 ? '[dữ liệu nhị phân]' : clip(o.body, 4000)) }, mocked: rule ? (rule.label || rule.action) : undefined }
+          ? { k: 'call', id, cmd, http: { method: String(o.method || 'GET').toUpperCase(), url: String(o.url || ''), headers: o.headers || null, body: o.body == null ? undefined : (o.bodyBase64 ? '[dữ liệu nhị phân]' : clip(o.body, 64000)) }, mocked: rule ? (rule.label || rule.action) : undefined }
           : { k: 'call', id, cmd, args: clip(o, 4000), mocked: rule ? (rule.label || rule.action) : undefined })
       }
     } catch (e) {}
@@ -105,7 +105,7 @@ export const CAP_HOOK_SCRIPT = `(() => {
     const p = pending.get(callbackId)
     if (p) {
       pending.delete(callbackId)
-      if (p.isFetch && !error && data) emit({ k: 'result', id: p.id, ok: true, http: { status: data.status || 0, headers: data.headers || null, body: data.isBase64 ? '[dữ liệu nhị phân]' : clip(data.body, 4000) } })
+      if (p.isFetch && !error && data) emit({ k: 'result', id: p.id, ok: true, http: { status: data.status || 0, headers: data.headers || null, body: data.isBase64 ? '[dữ liệu nhị phân]' : clip(data.body, 64000) } })
       else emit({ k: 'result', id: p.id, ok: !error, data: clip(error || data, 4000) })
     }
     return origCb.apply(this, arguments)

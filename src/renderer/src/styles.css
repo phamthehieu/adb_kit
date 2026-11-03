@@ -823,3 +823,21 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 0 4px; border-radius: 
 .gps-results button:hover { background: var(--bg-2); }
 .gps-results .muted { padding: 6px 8px; font-size: 12px; }
 .gps-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+
+/* ---------- deep links ---------- */
+.link-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; border-top: 1px solid var(--line); }
+.link-row .input { flex: 1; min-width: 0; font-size: 11.5px; }
+.link-tag { flex: none; width: 66px; text-align: center; font-size: 10px; font-weight: 600; padding: 1px 0; border-radius: 4px; background: var(--bg-3); color: var(--fg-mute); }
+.link-tag.on { background: var(--accent-dim); color: var(--accent); }
+.link-act { flex: 0 1 220px; min-width: 0; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-name { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- explore ---------- */
+.steps.explore { padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
+.ex-stats { display: flex; gap: 22px; flex-wrap: wrap; }
+.ex-stats > div { display: flex; flex-direction: column; }
+.ex-stats b { font-size: 22px; font-family: var(--mono); color: var(--fg); }
+.ex-stats span { font-size: 11px; color: var(--fg-mute); }
+.ex-stats .bad b { color: var(--err); }
+.ex-stats .warn b { color: var(--warn); }
+.ex-now { font-size: 12px; display: flex; align-items: center; gap: 6px; }

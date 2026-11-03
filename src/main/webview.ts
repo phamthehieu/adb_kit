@@ -31,7 +31,8 @@ export interface InspectorOptions {
 }
 
 const shorten = (url = ''): string => url.replace(/^https?:\/\/[^/]+/, '') || url
-const clip = (s: string | undefined, n = 4000): string | undefined =>
+// Bodies are kept up to 64 KB so recorded answers can be replayed as they were.
+const clip = (s: string | undefined, n = 64_000): string | undefined =>
   s === undefined ? undefined : s.length > n ? `${s.slice(0, n)}…(${s.length} ký tự)` : s
 /** The app's own bundled files are not "API calls". */
 const LOCAL_HOST = /^(https?:\/\/(tauri\.localhost|localhost|appassets\.androidplatform\.net|127\.0\.0\.1)(:\d+)?\/|file:|data:|blob:|capacitor:|ionic:)/

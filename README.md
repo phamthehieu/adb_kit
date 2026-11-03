@@ -139,6 +139,21 @@ Lưu ý:
   - ảnh chụp cùng tên so từng điểm ảnh, kèm ảnh khác biệt;
   - lỗi JS mới.
 
+## Đợt 5: tự khám phá, phát lại API, deep link, rò rỉ RAM, xu hướng, RTL
+
+- **Tự khám phá app** (Tự động test › "Tự khám phá"): không cần kịch bản.
+  - Cách chạy: mở app, đọc từng màn (nhận diện màn bằng chữ ký id + chữ, bỏ qua số), bấm lần lượt các nút chưa bấm, cuộn thử một lần, rồi Back. Tự đồng ý hộp thoại xin quyền, mở lại app khi bị văng ra, và dừng nếu máy khóa màn hình.
+  - **Không bao giờ bấm** nút đăng xuất, xóa, thanh toán, mua, chuyển tiền, gọi…; người dùng có thể thêm từ cấm riêng.
+  - Kết quả `kham-pha.html`: ảnh từng màn, quan hệ "đến từ / dẫn tới", vấn đề giao diện (luật Soát UI), và crash / ANR kèm các bước tái hiện từ lúc mở app.
+- **Ghi API rồi phát lại** (tab Mạng / API):
+  - "Phát lại N" biến các phản hồi vừa ghi thành giả lập (cùng status và body, đường dẫn dài được ưu tiên). "Giữ phản hồi này" chỉ cố định một API.
+  - "Lưu bộ… / Mở bộ…" lưu và mở file `.mock.json`, sửa tay được.
+  - Bước kịch bản **"Giả lập: phát lại API đã ghi (file)"**. Phản hồi nay được giữ tới 64 KB.
+- **Deep link & màn hình** (tab Dữ liệu): đọc Activity Resolver Table của `dumpsys package` (không cần bản debug), liệt kê deep link (App Link / Web / Intent, sửa được trước khi mở) và các activity (mở được nếu exported).
+- **Rò rỉ bộ nhớ**: khi chạy nhiều lượt và có đo hiệu năng, app đo RAM cuối mỗi lượt. RAM tăng ở ≥ 75% số lượt và tổng tăng hơn 20% / 25 MB (tính từ lượt 2) thì báo cáo có cảnh báo, kèm RAM từng lượt.
+- **Xu hướng kết quả** (cuối tab Tự động test): `xu-huong.html` gom mọi `report.json` 30 ngày theo kịch bản, gồm tỉ lệ đạt, dải 20 lần gần nhất (bấm để mở báo cáo), test **chập chờn** (đổi đạt/lỗi ≥ 2 lần trong 10 lần gần nhất) và kịch bản luôn lỗi.
+- **Bố cục phải-sang-trái** (Soát UI, mọi Android) và **ngôn ngữ riêng của app** (Android 13+, gồm en-XA chữ dài giả và ar-XB RTL giả).
+
 ## Hướng dẫn trong app
 
 Nút **Hướng dẫn** trên thanh công cụ (đọc được cả khi chưa cắm điện thoại):
@@ -249,7 +264,7 @@ Sau khi tạo báo cáo lỗi (F8), bấm **Tạo ticket Jira**: ADB Kit tạo t
 | `src/renderer/src/lib/rollingVideo.ts` | quay sẵn video vòng lặp từ màn mirror |
 | `src/renderer/src/components/BugDialog.tsx` | hộp thoại Báo lỗi |
 | `src/main/devconf.ts` | đổi / khôi phục cấu hình máy (chế độ tối, cỡ chữ, mật độ, hiệu ứng…) |
-| `src/renderer/src/lib/uiLint.ts` | luật soát giao diện: vùng bấm, nhãn, chữ đè/cắt, tương phản |
+| `src/shared/uiLint.ts` | luật soát giao diện: vùng bấm, nhãn, chữ đè/cắt, tương phản |
 | `src/renderer/src/components/CheckPanel.tsx` | tab Soát UI |
 | `src/main/jira.ts` | Jira REST v2: cấu hình, kiểm tra kết nối, tạo ticket + đính kèm |
 | `src/renderer/src/components/JiraBox.tsx` | khung Jira trong hộp thoại Báo lỗi |
@@ -259,6 +274,10 @@ Sau khi tạo báo cáo lỗi (F8), bấm **Tạo ticket Jira**: ADB Kit tạo t
 | `src/main/gps.ts` | vị trí GPS giả lập (Android 12+) |
 | `src/main/multirun.ts` | chạy bộ test trên nhiều máy + bảng tổng hợp |
 | `src/main/compare.ts` | so sánh 2 lần chạy (so-sanh.html) |
+| `src/main/explore.ts` | tự khám phá app (kham-pha.html) |
+| `src/main/trends.ts` | xu hướng kết quả, test chập chờn (xu-huong.html) |
+| `src/main/applinks.ts` | deep link và màn hình từ manifest |
+| `src/renderer/src/components/ExplorePanel.tsx`, `MapPicker.tsx` | tab Tự khám phá, bản đồ chọn vị trí |
 | `src/renderer/src/components/DataPanel.tsx`, `MultiRunBox.tsx` | tab Dữ liệu, khung chạy nhiều máy |
 | `src/renderer/src/components/HelpPanel.tsx`, `Tour.tsx` | tab Hướng dẫn và lớp phủ "Chỉ cho tôi" |
 | `src/preload/index.ts` | API `window.api` cho renderer |

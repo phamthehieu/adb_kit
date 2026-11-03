@@ -27,6 +27,14 @@ function summary(c: NetCall): string {
   return c.url
 }
 
+/** A recorded HTTP answer as a mock rule (same status + body), or null if it can't be replayed. */
+function ruleFrom(c: NetCall): MockRule | null {
+  if (c.kind !== 'http' || c.source === 'chucker' || c.mocked || !c.status || c.result === undefined) return null
+  if (/…\(\d+ ký tự\)$/.test(c.result) || /^\[dữ liệu nhị phân/.test(c.result)) return null
+  const match = c.url.replace(/^https?:\/\/[^/]+/, '').split('?')[0] || c.url
+  return { match, kind: 'http', action: 'status', status: c.status, body: c.result }
+}
+
 function kindLabel(c: NetCall): string {
   if (c.source === 'bridge') return c.kind === 'http' ? 'HTTP·Bridge' : c.method === 'event' ? 'Sự kiện' : 'Bridge'
   if (c.kind === 'ipc') return 'Lệnh'
@@ -120,6 +128,40 @@ export function NetworkPanel({ serial }: { serial: string }) {
     }
   }
   const cutLeft = cutUntil ? Math.max(0, Math.ceil((cutUntil - Date.now()) / 1000)) : 0
+
+  // Record → replay: turn real answers into mock rules (same status + body), save / load sets.
+  const replayRules = (list: NetCall[]): MockRule[] => {
+    const byPath = new Map<string, MockRule>()
+    for (const c of list) {
+      const r = ruleFrom(c)
+      if (r) byPath.set(r.match, r) // the latest answer for a path wins
+    }
+    // Longer paths first so /api/user/orders isn't answered by the /api/user rule.
+    return [...byPath.values()].sort((a, b) => b.match.length - a.match.length)
+  }
+  const replayAll = (): void => {
+    const rules = replayRules([...calls.values()])
+    if (!rules.length) return setInfo((l) => [...l.slice(-4), 'Chưa có API nào ghi được đầy đủ để phát lại (cần HTTP có phản hồi, không phải app native/Chucker)'])
+    if (!confirm(`Phát lại ${rules.length} API với đúng phản hồi đã ghi?\n\nTừ giờ app nhận các phản hồi này thay vì gọi server (tự hết sau 15 phút, hoặc bấm "Bỏ hết").`)) return
+    void setMocks([...mocks.filter((m) => !rules.some((r) => r.match === m.match)), ...rules])
+  }
+  const saveSet = async (): Promise<void> => {
+    const rules = mocks.length ? mocks : replayRules([...calls.values()])
+    if (!rules.length) return setInfo((l) => [...l.slice(-4), 'Chưa có gì để lưu'])
+    const p = await window.api.net.saveMockSet(rules, pkg.split('.').pop() ?? 'api')
+    if (p) setInfo((l) => [...l.slice(-4), `Đã lưu ${rules.length} API vào ${p} — dùng bước "Giả lập: phát lại API đã ghi" trong kịch bản`])
+  }
+  const openSet = async (): Promise<void> => {
+    try {
+      const r = await window.api.net.openMockSet()
+      if (!r) return
+      await setMocks([...mocks.filter((m) => !r.rules.some((x) => x.match === m.match)), ...r.rules])
+      setInfo((l) => [...l.slice(-4), `Đang phát lại ${r.rules.length} API từ ${r.path.split(/[\\/]/).pop()}`])
+    } catch (e) {
+      setInfo((l) => [...l.slice(-4), (e as Error).message])
+    }
+  }
+  const replayable = useMemo(() => replayRules([...calls.values()]).length, [calls]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pausedRef = useRef(paused)
   pausedRef.current = paused
@@ -226,6 +268,16 @@ export function NetworkPanel({ serial }: { serial: string }) {
             <option key={k} value={k}>{NET_PROFILES[k].label}</option>
           ))}
         </select>
+        <span className="muted">Ghi &amp; phát lại:</span>
+        <button className="iconbtn" disabled={!running || !replayable} onClick={replayAll} title="Cho app nhận lại đúng các phản hồi API vừa ghi (không phụ thuộc server)">
+          Phát lại {replayable || ''}
+        </button>
+        <button className="iconbtn" disabled={!replayable && !mocks.length} onClick={() => void saveSet()} title="Lưu các phản hồi đã ghi (hoặc các giả lập đang bật) ra file .mock.json">
+          Lưu bộ…
+        </button>
+        <button className="iconbtn" disabled={!running} onClick={() => void openSet()} title="Mở bộ API đã lưu và phát lại">
+          Mở bộ…
+        </button>
         <span className="spacer" />
         <span className="muted">Mất mạng thật cả máy:</span>
         <select className="input" value={cutSec} onChange={(e) => setCutSec(Number(e.target.value))} disabled={cutLeft > 0}>
@@ -316,6 +368,19 @@ export function NetworkPanel({ serial }: { serial: string }) {
                   <button className="iconbtn" onClick={() => mockFor(selected, 'delay')} title="Chậm 5 giây">
                     Giả lập chậm
                   </button>
+                  {selected.kind === 'http' && (
+                    <button
+                      className="iconbtn"
+                      disabled={!ruleFrom(selected)}
+                      onClick={() => {
+                        const r = ruleFrom(selected)
+                        if (r) void setMocks([...mocks.filter((m) => m.match !== r.match), r])
+                      }}
+                      title={ruleFrom(selected) ? 'Từ giờ API này luôn trả về đúng phản hồi này (sửa được trong file khi Lưu bộ…)' : 'Phản hồi bị cắt / nhị phân / chưa có — không phát lại được'}
+                    >
+                      Giữ phản hồi này
+                    </button>
+                  )}
                 </>
               )}
               <button className="iconbtn ghost" onClick={() => setSel(null)}><X size={13} /></button>

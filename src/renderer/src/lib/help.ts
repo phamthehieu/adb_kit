@@ -539,6 +539,8 @@ export const TOPICS: HelpTopic[] = [
       ['Hiệu ứng chuyển động', 'Tắt để test tự động ổn định và nhanh hơn.'],
       ['Hiện viền layout', 'Vẽ khung mọi phần tử (công cụ dev Android) — thấy rõ lề, căn chỉnh.'],
       ['Hiện điểm chạm', 'Vòng tròn ở chỗ chạm — hữu ích khi quay video.'],
+      ['Bố cục phải-sang-trái', 'Lật bố cục như tiếng Ả Rập (mở lại app để thấy) — tìm lề căn cứng, mũi tên sai chiều.'],
+      ['Ngôn ngữ của app', 'Android 13+: đổi riêng ngôn ngữ một app (Tiếng Việt / English / chữ dài giả en-XA / phải-sang-trái giả ar-XB) để tìm chữ bị cắt và chữ quên dịch.'],
       ['Vị trí GPS giả lập', 'Android 12+. "Đặt 1 điểm": kéo / cuộn bản đồ, bấm vào chỗ muốn đặt, rồi "Đặt vị trí ở đây". "Đi từ A → B": bấm điểm A rồi điểm B trên bản đồ, nhập số giây (app tính luôn tốc độ km/h) → "Bắt đầu đi"; chấm xanh chạy theo vị trí của điện thoại. Có ô tìm địa chỉ, ô dán tọa độ "vĩ độ, kinh độ" từ Google Maps, và các địa điểm có sẵn. "Tắt giả lập" để về GPS thật; tự tắt khi đóng ADB Kit.'],
       ['Thử chữ to 1.3× + soát', 'Đặt cỡ chữ 1.3× rồi soát luôn.'],
       ['Vùng bấm nhỏ', 'Nhỏ hơn 48×48 dp (dưới 32 dp = lỗi nặng) — khó bấm.'],
@@ -604,6 +606,51 @@ export const TOPICS: HelpTopic[] = [
     tour: [{ target: { text: 'Dữ liệu app' }, panel: 'data', title: 'Dữ liệu app', body: 'Chọn app debug để xem prefs, database, MMKV.' }]
   },
   {
+    id: 'explore',
+    group: 'Kiểm thử',
+    title: 'Tự khám phá app',
+    summary: 'Không cần kịch bản: tự bấm khắp app, tìm crash và lỗi giao diện',
+    when: ['Có bản build mới, muốn "quét" nhanh xem có crash không trước khi test kỹ.', 'Cần danh sách / ảnh tất cả các màn của app.'],
+    steps: [
+      'Mở khóa điện thoại (và tăng "Thời gian tắt màn hình" nếu chạy lâu). Nên đăng nhập sẵn bằng tài khoản test.',
+      'Tab Tự động test › "Tự khám phá". Chọn app, số phút, thêm các chữ không được bấm (nếu có) → "Bắt đầu khám phá".',
+      'ADB Kit tự: bấm lần lượt các nút chưa bấm trên mỗi màn (trên xuống dưới), cuộn thử một lần, rồi Back; tự đồng ý hộp thoại xin quyền; app crash thì ghi lại và mở lại app.',
+      'Xong bấm "Mở báo cáo khám phá": số màn, thao tác, crash / ANR (kèm các bước tái hiện từ lúc mở app và stacktrace), lưới ảnh từng màn với "đến từ / dẫn tới" và các vấn đề giao diện tìm thấy.'
+    ],
+    tips: [
+      'Không bao giờ bấm các nút có chữ như đăng xuất, xóa, thanh toán, mua, đặt hàng, chuyển tiền, nạp tiền, gọi… Ô nhập chữ không được điền.',
+      'Chạy kèm "Thử chữ to 1.3×" (Soát UI) hoặc "Mạng chập chờn" (Mạng / API) để tìm thêm lỗi.',
+      'Điện thoại tự khóa giữa chừng thì khám phá dừng lại và báo.'
+    ],
+    tour: [{ target: { text: 'Tự khám phá', within: '.auto .seg' }, panel: 'auto', title: 'Tự khám phá', body: 'Bấm để mở chế độ tự khám phá app.' }]
+  },
+  {
+    id: 'replay',
+    group: 'Kiểm thử',
+    title: 'Ghi API rồi phát lại',
+    summary: 'Cho app nhận lại đúng phản hồi đã ghi — test ổn định, không phụ thuộc server',
+    when: ['Test tự động hay lỗi vì dữ liệu server thay đổi.', 'Cần màn hình với dữ liệu khó tạo (đơn 50 sản phẩm, số dư âm…).', 'Server staging đang chết mà vẫn cần test giao diện.'],
+    steps: [
+      'Tab Mạng / API, chọn app, dùng app bình thường để ghi các API (phản hồi được giữ tới 64 KB mỗi lời gọi).',
+      '"Phát lại N": từ giờ app nhận đúng các phản hồi vừa ghi thay vì gọi server. Hoặc chọn một lời gọi → "Giữ phản hồi này" để chỉ cố định API đó.',
+      '"Lưu bộ…": lưu thành file .mock.json (mở bằng Notepad để sửa body / status, ví dụ đổi số dư thành âm). "Mở bộ…" để phát lại file đã lưu.',
+      'Trong kịch bản: bước "Giả lập: phát lại API đã ghi (file)" → chọn file .mock.json, rồi bước "Tải lại giao diện app" để áp dụng từ lúc khởi động.',
+      'Hộp vàng "Đang giả lập…" liệt kê các API đang được phát lại; "Bỏ hết" để về server thật.'
+    ],
+    tips: ['Áp dụng cho API của WebView và miniapp (WVFetch). App native đọc qua Chucker thì chỉ xem được, không phát lại được.', 'Phản hồi bị cắt (quá 64 KB) hoặc nhị phân thì không phát lại.']
+  },
+  {
+    id: 'links',
+    group: 'Kiểm thử',
+    title: 'Deep link & màn hình của app',
+    summary: 'Mọi deep link và màn hình app khai báo — bấm là vào thẳng',
+    steps: [
+      'Tab Dữ liệu › "Deep link & màn hình", chọn app (không cần bản debug).',
+      'Danh sách deep link (App Link = link https đã xác minh, Web = mở được từ trình duyệt, Intent = chỉ qua intent): sửa phần sau link (id, tham số) rồi "Mở". Nút + lưu vào "Mở link nhanh" (tab Miniapp).',
+      'Danh sách màn hình (activity): "Mở" để vào thẳng — chỉ được với màn exported, các màn khác Android sẽ từ chối.'
+    ]
+  },
+  {
     id: 'multi',
     group: 'Kiểm thử',
     title: 'Chạy trên nhiều máy & so sánh 2 lần chạy',
@@ -616,7 +663,12 @@ export const TOPICS: HelpTopic[] = [
       'So sánh 2 lần chạy: cuối tab Tự động test bấm "So sánh 2 lần chạy…" → chọn thư mục báo cáo lần trước, rồi lần này (cùng kịch bản).',
       'Trang so sánh: bước mới lỗi / đã hết lỗi / chậm hơn, hiệu năng (mở app, RAM, CPU, giật), API mới / không còn gọi / mới lỗi / chậm hơn, ảnh chụp cùng tên khác bao nhiêu % (kèm ảnh tô đỏ chỗ khác), lỗi JS mới.'
     ],
-    tips: ['Chỉ so được báo cáo tạo từ bản ADB Kit này trở đi (có report.json).', 'Đặt tên bước "Chụp màn hình" giống nhau ở hai lần chạy để so ảnh.']
+    tips: [
+      'Chỉ so được báo cáo tạo từ bản ADB Kit này trở đi (có report.json).',
+      'Đặt tên bước "Chụp màn hình" giống nhau ở hai lần chạy để so ảnh.',
+      '"Xu hướng kết quả…" (cuối tab Tự động test): tỉ lệ đạt từng kịch bản 30 ngày, dải màu 20 lần gần nhất, và danh sách test "chập chờn" (lúc đạt lúc lỗi).',
+      'Rò rỉ bộ nhớ: chạy kịch bản ≥ 4 lượt với "Đo hiệu năng" — nếu RAM cuối mỗi lượt cứ tăng mà không giảm, báo cáo có cảnh báo vàng "Có dấu hiệu rò rỉ bộ nhớ".'
+    ]
   },
 
   /* ================================================================ Báo lỗi */

@@ -33,7 +33,8 @@ export async function getConfig(serial: string): Promise<DevConfig> {
     ...ANIM_KEYS.map((k) => `settings get global ${k}`),
     'getprop debug.layout',
     'settings get system show_touches',
-    'getprop ro.build.version.sdk'
+    'getprop ro.build.version.sdk',
+    'settings get global debug.force_rtl'
   ]
   const r = await shell(serial, cmds.join(`; echo ${SEP}; `))
   const p = r.stdout.split(SEP).map((s) => s.trim())
@@ -49,6 +50,7 @@ export async function getConfig(serial: string): Promise<DevConfig> {
     layoutBounds: p[6] === 'true',
     showTouches: p[7] === '1',
     sdk: num(p[8], 0),
+    rtl: p[9] === '1',
     changed: Object.keys(orig)
   }
 }
@@ -68,6 +70,8 @@ function valueOf(c: DevConfig, key: ConfKey): string {
       return String(c.layoutBounds)
     case 'showTouches':
       return c.showTouches ? '1' : '0'
+    case 'rtl':
+      return c.rtl ? '1' : '0'
   }
 }
 
@@ -109,7 +113,23 @@ async function apply(serial: string, key: ConfKey, value: string): Promise<strin
     case 'showTouches':
       await shell(serial, `settings put system show_touches ${value === '1' ? 1 : 0}`)
       return undefined
+    case 'rtl': {
+      // Same as the developer option: setting + system property; apps read it when they lay out.
+      const on = value === '1'
+      await shell(serial, `settings put global debug.force_rtl ${on ? 1 : 0}; setprop debug.force_rtl ${on ? 'true' : 'false'}`)
+      return on ? 'Đã bật bố cục phải-sang-trái — đóng rồi mở lại app để thấy (chữ vẫn là tiếng Việt, chỉ bố cục bị lật như tiếng Ả Rập).' : 'Đã tắt bố cục phải-sang-trái — mở lại app để về như cũ.'
+    }
   }
+}
+
+/** Per-app language (Android 13+): `cmd locale set-app-locales`. Empty locale = follow the phone. */
+export async function setAppLocale(serial: string, pkg: string, locale: string): Promise<string> {
+  const sdk = Number((await shell(serial, 'getprop ro.build.version.sdk')).stdout.trim()) || 0
+  if (sdk < 33) throw new Error('Đổi ngôn ngữ riêng cho app cần Android 13 trở lên. Máy cũ hơn: đổi ngôn ngữ cả máy trong Cài đặt › Quản lý chung › Ngôn ngữ.')
+  if (!/^[\w.]+$/.test(pkg) || (locale && !/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(locale))) throw new Error('Tham số không hợp lệ')
+  const r = await shell(serial, `cmd locale set-app-locales ${pkg} --locales ${locale || '""'}`)
+  if (/exception|error|unknown/i.test(r.stdout + r.stderr)) throw new Error((r.stdout + r.stderr).trim())
+  return (await shell(serial, `cmd locale get-app-locales ${pkg}`)).stdout.trim()
 }
 
 export async function setConfig(serial: string, key: ConfKey, value: string): Promise<ConfResult> {

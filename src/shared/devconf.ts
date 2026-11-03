@@ -11,11 +11,13 @@ export interface DevConfig {
   animations: number
   layoutBounds: boolean
   showTouches: boolean
+  /** Developer option "Force RTL layout direction". */
+  rtl: boolean
   /** Settings changed by ADB Kit since the last restore: key → original value. */
   changed: string[]
 }
 
-export type ConfKey = 'dark' | 'fontScale' | 'density' | 'animations' | 'layoutBounds' | 'showTouches'
+export type ConfKey = 'dark' | 'fontScale' | 'density' | 'animations' | 'layoutBounds' | 'showTouches' | 'rtl'
 
 export interface ConfResult {
   config: DevConfig

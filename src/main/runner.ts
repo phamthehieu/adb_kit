@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { adb, adbBinary, adbSpawn, deviceDetails, q, shell } from './adb'
 import { dumpUi } from './ui'
 import { ScreenRecorder } from './recorder'
@@ -15,6 +15,9 @@ export interface PerfData {
   samples: PerfSample[]
   startups: StartupRecord[]
   frames: FrameStats | null
+  /** Memory at the end of each round, and the leak verdict if it keeps climbing. */
+  rounds?: { iteration: number; memMb: number }[]
+  leak?: string
 }
 
 /** Where visual reference images live (set by main: Documents/ADB Kit/baselines). */
@@ -227,6 +230,25 @@ export class CrashWatcher {
   }
 }
 
+/**
+ * Memory leak heuristic over rounds of the same script: the app should come back to roughly the
+ * same memory after each round. Flag when it keeps climbing — at least 4 rounds, ≥ 75% of round
+ * steps going up, and a total growth over 20% and 25 MB from the second round (the first one
+ * warms caches up).
+ */
+export function leakVerdict(rounds: { iteration: number; memMb: number }[]): string | undefined {
+  if (rounds.length < 4) return undefined
+  const r = rounds.slice(1)
+  const ups = r.slice(1).filter((x, i) => x.memMb > r[i].memMb).length
+  const first = r[0].memMb
+  const last = r[r.length - 1].memMb
+  const grow = last - first
+  if (ups / (r.length - 1) >= 0.75 && grow > 25 && grow / first > 0.2) {
+    return `Có dấu hiệu rò rỉ bộ nhớ: RAM tăng từ ${first} MB lên ${last} MB qua ${r.length} lượt (+${Math.round(grow)} MB, ~${Math.round(grow / (r.length - 1))} MB/lượt) và không giảm lại`
+  }
+  return undefined
+}
+
 /** Strip the logcat "date time pid tid L Tag:" prefix. */
 function clean(l: string): string {
   return l.replace(/^\d\d-\d\d \S+\s+\d+\s+\d+ \w (\S+)\s*:\s?/, '').trim()
@@ -235,7 +257,7 @@ function clean(l: string): string {
 /** Steps that may change what is on screen (they invalidate the cached UI dump). */
 const ACTIONS = new Set<Step['type']>([
   'tap', 'tapIf', 'longpress', 'swipe', 'scroll', 'text', 'key', 'wait', 'launch', 'stopApp', 'network', 'permission', 'deeplink', 'shell',
-  'permRevokeAll', 'appop', 'mock', 'mockClear', 'reloadWebView', 'otp'
+  'permRevokeAll', 'appop', 'mock', 'mockClear', 'reloadWebView', 'otp', 'mockFile'
 ])
 // Note: 'perf' is a check, not an action — it must not move the "since last action" window.
 
@@ -253,6 +275,8 @@ export class Runner {
   private web: WebViewInspector | null = null
   /** Native app with Chucker: API calls come from its database. */
   private chucker: ChuckerWatcher | null = null
+  /** App memory at the end of each round (repeat > 1, performance on). */
+  private roundMem: { iteration: number; memMb: number }[] = []
   /** One-time codes from notifications (created at run start when the script has an OTP step). */
   private otp: OtpWatcher | null = null
   /** When each step started (host ms) — Chucker calls arrive late, so they are matched by time. */
@@ -441,6 +465,11 @@ export class Runner {
           // Crashes are detected asynchronously; check after each step.
           if (this.crash) throw new Aborted()
         }
+        // Memory at the end of every round: a steady climb over rounds suggests a leak.
+        if (this.perf && repeat > 1) {
+          const s = await this.perf.sample()
+          if (s?.memMb !== undefined) this.roundMem.push({ iteration: it + 1, memMb: s.memMb })
+        }
       }
     } catch (e) {
       if (!(e instanceof Aborted)) {
@@ -512,8 +541,13 @@ export class Runner {
       visuals: this.visuals,
       appVersion: this.appVersion,
       mocksUsed: this.mocksUsed,
-      perf: this.perf ? { samples: this.perf.samples, startups: this.startups, frames } : this.startups.length ? { samples: [], startups: this.startups, frames: null } : null
+      perf: this.perf
+        ? { samples: this.perf.samples, startups: this.startups, frames, rounds: this.roundMem, leak: leakVerdict(this.roundMem) }
+        : this.startups.length
+          ? { samples: [], startups: this.startups, frames: null }
+          : null
     }
+    if (report.perf?.leak) this.log('warn', report.perf.leak)
     const path = writeReport(this.dir, report)
     writeFileSync(join(this.dir, 'script.json'), JSON.stringify(this.script, null, 2))
     // Machine-readable copy (without the big logcat) — used to compare two runs / builds.
@@ -807,6 +841,20 @@ export class Runner {
         this.mockRules = [...this.mockRules, step.rule]
         await this.web.setMocks(this.mockRules)
         this.mocksUsed.push(describeMock(step.rule))
+        return
+      }
+      case 'mockFile': {
+        // A recorded set of API answers (saved from the Mạng / API tab): replay all of them.
+        if (!this.web) throw new StepFailed('phát lại API cần chọn "App cần test" (bản build debug có WebView)')
+        let rules: MockRule[]
+        try {
+          rules = JSON.parse(readFileSync(step.path, 'utf8')) as MockRule[]
+        } catch (e) {
+          throw new StepFailed(`không đọc được file dữ liệu giả: ${(e as Error).message}`)
+        }
+        this.mockRules = [...this.mockRules, ...rules]
+        await this.web.setMocks(this.mockRules)
+        this.mocksUsed.push(`phát lại ${rules.length} API từ ${basename(step.path)}`)
         return
       }
       case 'mockClear':

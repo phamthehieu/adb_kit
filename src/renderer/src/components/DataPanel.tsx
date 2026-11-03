@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Database, FileCode2, KeyRound, Loader2, MessageSquareText, Play, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { Database, FileCode2, KeyRound, Link2, Loader2, MessageSquareText, Play, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '@shared/appdata'
 import type { OtpHit } from '../../../preload'
 import { setClipboard } from '../lib/control'
@@ -497,11 +497,129 @@ function MmkvView({ serial, pkg, file }: { serial: string; pkg: string; file: Da
   )
 }
 
+/* ------------------------------------------------------------ deep links */
+
+type LinksResult = Awaited<ReturnType<typeof window.api.links.list>>
+
+function LinksTab({ serial }: { serial: string }) {
+  const [pkg, setPkg] = useState(() => localStorage.getItem('dataPkg') ?? localStorage.getItem('netPkg') ?? '')
+  const [res, setRes] = useState<LinksResult | null>(null)
+  const [err, setErr] = useState('')
+  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+  const [edit, setEdit] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!pkg) return
+    localStorage.setItem('dataPkg', pkg)
+    setLoading(true)
+    setErr('')
+    try {
+      setRes(await window.api.links.list(serial, pkg))
+    } catch (e) {
+      setRes(null)
+      setErr((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }, [serial, pkg])
+  useEffect(() => void load(), [load])
+
+  const open = async (url: string): Promise<void> => {
+    setMsg(null)
+    try {
+      await window.api.mini.openLink(serial, url, pkg)
+      setMsg({ text: `Đã mở ${url}` })
+    } catch (e) {
+      setMsg({ text: (e as Error).message, bad: true })
+    }
+  }
+  const openScreen = async (a: string): Promise<void> => {
+    setMsg(null)
+    try {
+      await window.api.links.openActivity(serial, pkg, a)
+      setMsg({ text: `Đã mở màn ${a.split('.').pop()}` })
+    } catch (e) {
+      setMsg({ text: (e as Error).message, bad: true })
+    }
+  }
+  const save = (url: string): void => {
+    let list: { name: string; url: string }[] = []
+    try {
+      list = JSON.parse(localStorage.getItem('miniLinks') ?? '[]')
+    } catch {
+      /* empty */
+    }
+    if (!list.some((l) => l.url === url)) localStorage.setItem('miniLinks', JSON.stringify([...list, { name: url, url }]))
+    setMsg({ text: 'Đã lưu vào "Mở link nhanh" (tab Miniapp)' })
+  }
+
+  return (
+    <div className="dt-body">
+      <div className="log-tools" style={{ padding: 0, border: 0 }}>
+        <PackagePicker serial={serial} value={pkg} onChange={setPkg} placeholder="Chọn app…" style={{ width: 280 }} />
+        <button className="iconbtn" disabled={!pkg || loading} onClick={() => void load()} title="Đọc lại">
+          {loading ? <Loader2 size={12} className="spin" /> : <RefreshCw size={12} />}
+        </button>
+        <span className="muted">Đọc từ manifest của app trên máy — không cần bản debug</span>
+      </div>
+      {err && <div className="ck-note bad">{err}</div>}
+      {msg && <div className={`ck-note ${msg.bad ? 'bad' : ''}`}>{msg.text}</div>}
+      {res && (
+        <>
+          <section className="mini-sec">
+            <div className="mini-head">
+              <Link2 size={14} />
+              <b>Deep link ({res.links.length})</b>
+              <span className="muted">sửa phần sau link (id, tham số) rồi bấm Mở</span>
+            </div>
+            {res.links.length === 0 && <div className="steps-empty">App không khai báo deep link nào.</div>}
+            {res.links.map((l) => {
+              const v = edit[l.url] ?? l.url
+              return (
+                <div key={l.url + l.activity} className="link-row">
+                  <span className={`link-tag ${l.browsable ? 'on' : ''}`} title={l.browsable ? 'Mở được từ trình duyệt / app khác' : 'Chỉ mở được bằng intent'}>
+                    {l.autoVerify ? 'App Link' : l.browsable ? 'Web' : 'Intent'}
+                  </span>
+                  <input className="input mono" value={v} onChange={(e) => setEdit({ ...edit, [l.url]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void open(v)} />
+                  <span className="muted link-act" title={l.activity}>
+                    {l.activity.split('.').pop()}
+                    {l.path ? ` · ${l.path}` : ''}
+                  </span>
+                  <button className="iconbtn" onClick={() => void open(v)}><Play size={12} /> Mở</button>
+                  <button className="iconbtn ghost" onClick={() => save(v)} title="Lưu vào Mở link nhanh"><Plus size={12} /></button>
+                </div>
+              )
+            })}
+          </section>
+          <section className="mini-sec">
+            <div className="mini-head">
+              <FileCode2 size={14} />
+              <b>Màn hình (activity) ({res.screens.length})</b>
+              <span className="muted">chỉ màn "exported" mới mở trực tiếp được</span>
+            </div>
+            {res.screens.map((s) => (
+              <div key={s.activity} className="link-row">
+                <span className={`link-tag ${s.launcher ? 'on' : ''}`}>{s.launcher ? 'Màn chính' : s.exported === null ? '?' : 'Có filter'}</span>
+                <span className="mono link-name" title={s.activity}>{s.activity}</span>
+                <span className="muted link-act">{s.actions.slice(0, 3).join(', ')}</span>
+                <button className="iconbtn" onClick={() => void openScreen(s.activity)}><Play size={12} /> Mở</button>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------ panel */
 
+type DataTab = 'otp' | 'app' | 'links'
+
 export function DataPanel({ serial }: { serial: string }) {
-  const [tab, setTab] = useState<'otp' | 'app'>(() => (localStorage.getItem('dataTab') as 'otp' | 'app') || 'otp')
-  const pick = (t: 'otp' | 'app'): void => {
+  const [tab, setTab] = useState<DataTab>(() => (localStorage.getItem('dataTab') as DataTab) || 'otp')
+  const pick = (t: DataTab): void => {
     setTab(t)
     localStorage.setItem('dataTab', t)
   }
@@ -511,9 +629,10 @@ export function DataPanel({ serial }: { serial: string }) {
         <div className="seg">
           <button className={tab === 'otp' ? 'on' : ''} onClick={() => pick('otp')}>OTP &amp; tài khoản test</button>
           <button className={tab === 'app' ? 'on' : ''} onClick={() => pick('app')}>Dữ liệu app</button>
+          <button className={tab === 'links' ? 'on' : ''} onClick={() => pick('links')}>Deep link &amp; màn hình</button>
         </div>
       </div>
-      {tab === 'otp' ? <OtpTab serial={serial} /> : <AppDataTab serial={serial} />}
+      {tab === 'otp' ? <OtpTab serial={serial} /> : tab === 'app' ? <AppDataTab serial={serial} /> : <LinksTab serial={serial} />}
     </div>
   )
 }

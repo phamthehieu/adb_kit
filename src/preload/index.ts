@@ -29,6 +29,8 @@ import type { MiniAppList, OpenTiming, WebPage, WebViewProc } from '../shared/mi
 import type { BugInput, BugResult, BugSnap, Severity } from '../shared/bug'
 import type { JiraCheck, JiraConf, JiraIssue, JiraState } from '../shared/jira'
 import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '../shared/appdata'
+import type { AppLink, AppScreen } from '../main/applinks'
+import type { ExploreOptions, ExploreProgress } from '../main/explore'
 
 export interface CrashEvent {
   serial: string
@@ -124,6 +126,7 @@ const api = {
     save: (script: Script, path: string | null): Promise<string | null> => invoke('auto:save', script, path),
     openReportsDir: (): Promise<string> => invoke('auto:reports-dir'),
     compareRuns: (): Promise<string | null> => invoke('auto:compare'),
+    trends: (): Promise<string> => invoke('auto:trends'),
     openBaselinesDir: (): Promise<string> => invoke('auto:baselines-dir'),
     reportStats: (): Promise<{ count: number; bytes: number; oldest: number | null }> => invoke('reports:stats'),
     cleanReports: (olderThanDays: number): Promise<{ deleted: number; freed: number }> => invoke('reports:clean', olderThanDays)
@@ -133,6 +136,9 @@ const api = {
     stop: (): Promise<void> => invoke('suite:stop'),
     onEvent: (cb: (e: SuiteEvent) => void) => on('suite:event', cb),
     runMulti: (serials: string[], suite: Suite, opts: RunOptions): Promise<void> => invoke('suite:run-multi', serials, suite, opts),
+    explore: (serial: string, pkg: string, opts: ExploreOptions): Promise<string> => invoke('explore:start', serial, pkg, opts),
+    stopExplore: (): Promise<void> => invoke('explore:stop'),
+    onExplore: (cb: (p: ExploreProgress) => void) => on('explore:progress', cb),
     stopMulti: (): Promise<void> => invoke('suite:stop-multi'),
     onMulti: (cb: (e: MultiEvent) => void) => on('multi:event', cb),
     open: (): Promise<{ path: string; suite: Suite } | null> => invoke('suite:open'),
@@ -150,6 +156,8 @@ const api = {
     reload: (serial?: string, pkg?: string): Promise<boolean> => invoke('net:reload', serial, pkg),
     setMocks: (rules: MockRule[]): Promise<void> => invoke('net:mocks', rules),
     setProfile: (p: NetProfile | null): Promise<void> => invoke('net:profile', p),
+    saveMockSet: (rules: MockRule[], name: string): Promise<string | null> => invoke('net:save-mock-set', rules, name),
+    openMockSet: (): Promise<{ path: string; rules: MockRule[] } | null> => invoke('net:open-mock-set'),
     cut: (serial: string, seconds: number): Promise<{ until: number }> => invoke('net:cut', serial, seconds),
     onCalls: (cb: (calls: NetCall[]) => void) => on('net:calls', cb),
     onInfo: (cb: (msg: string) => void) => on('net:info', cb)
@@ -181,6 +189,10 @@ const api = {
     query: (serial: string, pkg: string, path: string, sql: string): Promise<DbResult> => invoke('data:query', serial, pkg, path, sql),
     mmkv: (serial: string, pkg: string, path: string): Promise<MmkvEntry[]> => invoke('data:mmkv', serial, pkg, path)
   },
+  links: {
+    list: (serial: string, pkg: string): Promise<{ links: AppLink[]; screens: AppScreen[] }> => invoke('links:list', serial, pkg),
+    openActivity: (serial: string, pkg: string, activity: string): Promise<string> => invoke('links:open-activity', serial, pkg, activity)
+  },
   otp: {
     start: (serial: string): Promise<void> => invoke('otp:start', serial),
     poll: (serial: string): Promise<OtpHit[]> => invoke('otp:poll', serial),
@@ -201,7 +213,8 @@ const api = {
   conf: {
     get: (serial: string): Promise<DevConfig> => invoke('conf:get', serial),
     set: (serial: string, key: ConfKey, value: string): Promise<ConfResult> => invoke('conf:set', serial, key, value),
-    restore: (serial: string): Promise<ConfResult> => invoke('conf:restore', serial)
+    restore: (serial: string): Promise<ConfResult> => invoke('conf:restore', serial),
+    appLocale: (serial: string, pkg: string, locale: string): Promise<string> => invoke('conf:app-locale', serial, pkg, locale)
   },
   jira: {
     get: (): Promise<JiraState> => invoke('jira:get'),

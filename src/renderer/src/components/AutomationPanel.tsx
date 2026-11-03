@@ -41,6 +41,7 @@ import { Key } from '@shared/control'
 import { autoStore, onInspect, onMasksDone, onRecord, useAutoState } from '../lib/automation'
 import { PackagePicker } from './PackagePicker'
 import { SuitePanel } from './SuitePanel'
+import { ExplorePanel } from './ExplorePanel'
 
 type StepState = { state: 'running' | 'ok' | 'failed' | 'warn'; message?: string }
 type LogLine = { level: 'info' | 'warn' | 'error' | 'ok'; message: string; at: string }
@@ -127,6 +128,7 @@ const ADDABLE: { key: string; label: string; make: (app: string) => Step }[] = [
   { key: 'appop', label: 'Đặt quyền đặc biệt (appops)', make: (app) => ({ type: 'appop', pkg: app, op: 'SYSTEM_ALERT_WINDOW', mode: 'allow' }) },
   { key: 'deeplink', label: 'Mở deep link / URL', make: () => ({ type: 'deeplink', url: '' }) },
   { key: 'otp', label: 'Chờ mã OTP (SMS / thông báo) rồi điền', make: () => ({ type: 'otp', timeoutMs: 60000 }) },
+  { key: 'mockFile', label: 'Giả lập: phát lại API đã ghi (file)', make: () => ({ type: 'mockFile', path: '' }) },
   { key: 'shell', label: 'Lệnh adb shell', make: () => ({ type: 'shell', cmd: '' }) }
 ]
 
@@ -192,7 +194,10 @@ export function AutomationPanel({ serial }: { serial: string }) {
   const [picked, setPicked] = useState<UiNode | null>(null)
   const [inspectBusy, setInspectBusy] = useState(false)
   const [selected, setSelected] = useState<number | null>(null)
-  const [tab, setTab] = useState<'script' | 'suite'>(() => (localStorage.getItem('autoTab') === 'suite' ? 'suite' : 'script'))
+  const [tab, setTab] = useState<'script' | 'suite' | 'explore'>(() => {
+    const t = localStorage.getItem('autoTab')
+    return t === 'suite' || t === 'explore' ? t : 'script'
+  })
   const [showInfo, setShowInfo] = useState(false)
   useEffect(() => localStorage.setItem('autoTab', tab), [tab])
 
@@ -592,6 +597,22 @@ export function AutomationPanel({ serial }: { serial: string }) {
             <PackagePicker serial={serial} className="sm grow" value={s.pkg} placeholder="package" onChange={(p) => updateStep(i, { pkg: p })} />
           </>
         )
+      case 'mockFile':
+        return (
+          <>
+            <span className="muted mono" title={s.path}>{s.path ? s.path.split(/[\\/]/).pop() : 'chưa chọn file'}</span>
+            <button
+              className="iconbtn"
+              onClick={async (e) => {
+                stop(e)
+                const p = await window.api.net.openMockSet()
+                if (p) updateStep(i, { path: p.path })
+              }}
+            >
+              Chọn file…
+            </button>
+          </>
+        )
       case 'otp':
         return (
           <>
@@ -814,6 +835,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
         <div className="seg">
           <button className={tab === 'script' ? 'on' : ''} onClick={() => setTab('script')}>Kịch bản</button>
           <button className={tab === 'suite' ? 'on' : ''} onClick={() => setTab('suite')}>Bộ test</button>
+          <button className={tab === 'explore' ? 'on' : ''} onClick={() => setTab('explore')}>Tự khám phá</button>
         </div>
         {tab === 'script' && (
           <>
@@ -832,7 +854,9 @@ export function AutomationPanel({ serial }: { serial: string }) {
         )}
       </div>
 
-      {tab === 'suite' ? (
+      {tab === 'explore' ? (
+        <ExplorePanel serial={serial} />
+      ) : tab === 'suite' ? (
         <SuitePanel serial={serial} opts={opts} currentScriptPath={dirty ? null : path} onEditScript={editFromSuite} />
       ) : (
       <>
@@ -1032,6 +1056,13 @@ export function AutomationPanel({ serial }: { serial: string }) {
             onClick={() => void window.api.automation.compareRuns().catch((e: Error) => alert(e.message))}
           >
             So sánh 2 lần chạy…
+          </a>
+          <a
+            className="muted"
+            title="Tỉ lệ đạt theo thời gian của từng kịch bản và danh sách test chập chờn (lúc đạt lúc lỗi), 30 ngày gần nhất"
+            onClick={() => void window.api.automation.trends().catch((e: Error) => alert(e.message))}
+          >
+            Xu hướng kết quả…
           </a>
           <ReportsCleaner />
         </div>

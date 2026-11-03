@@ -45,6 +45,8 @@ export type Step =
   | { type: 'deeplink'; url: string }
   /** Wait for a one-time code to arrive in a notification (SMS…) and type it. */
   | { type: 'otp'; timeoutMs: number }
+  /** Replay a set of recorded API answers (JSON file of mock rules saved from Mạng / API). */
+  | { type: 'mockFile'; path: string }
   | { type: 'shell'; cmd: string; expect?: string }
   // API checks (WebView HTTP + Tauri commands, captured through DevTools)
   | {
@@ -550,6 +552,8 @@ export function describeStep(s: Step): string {
       return `Mở link ${s.url}`
     case 'otp':
       return `Chờ mã OTP trong thông báo (≤ ${sec(s.timeoutMs)}) rồi điền`
+    case 'mockFile':
+      return `Phát lại API đã ghi: ${s.path.split(/[\\/]/).pop() || '(chưa chọn file)'}`
     case 'shell':
       return `Lệnh adb shell: ${s.cmd}${s.expect ? ` (phải chứa "${s.expect}")` : ''}`
     case 'api': {

@@ -1,5 +1,5 @@
-import type { UiNode } from '@shared/automation'
-import type { UiIssue } from '@shared/devconf'
+import type { UiNode } from './automation'
+import type { UiIssue } from './devconf'
 
 /**
  * Checks the current screen (uiautomator tree + a screenshot) for common UI problems:

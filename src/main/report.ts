@@ -89,6 +89,12 @@ function perfSection(p: PerfData | null): string {
     ${cpus.length ? card('CPU cao nhất', `${peak(cpus)} %`, `trung bình ${avg(cpus)} %`) : ''}
     ${f ? card('Khung hình giật', `${f.jankPct} %`, `${f.janky}/${f.frames} khung · p90 ${f.p90 ?? '?'}ms · p99 ${f.p99 ?? '?'}ms`) : ''}
   </div>
+  ${p.leak ? `<div class="card" style="border-color:#f2b84b;background:#fff8e6;margin-bottom:12px"><b style="color:#8a5a00">⚠ ${esc(p.leak)}</b></div>` : ''}
+  ${
+    p.rounds && p.rounds.length > 1
+      ? `<div class="muted" style="margin-bottom:10px">RAM cuối mỗi lượt: ${p.rounds.map((r) => `lượt ${r.iteration}: <b>${r.memMb} MB</b>`).join(' · ')}</div>`
+      : ''
+  }
   ${perfChart(p)}`
 }
 
@@ -127,6 +133,7 @@ export function bugReport(r: ReportData, reportPath: string): string {
     ...vis.map((v) => `- Màn hình "${v.name}" ${v.sizeMismatch ?? `khác ảnh chuẩn ${v.diffPercent}%`}`),
     ...(r.perf?.startups.length ? [`- Thời gian mở app: ${r.perf.startups.map((s) => `${s.ms} ms`).join(', ')}`] : []),
     ...(r.perf?.frames ? [`- Khung hình giật: ${r.perf.frames.jankPct}% (${r.perf.frames.janky}/${r.perf.frames.frames})`] : []),
+    ...(r.perf?.leak ? [`- ${r.perf.leak}`] : []),
     ...jsErrors.map((e) => `- Lỗi JS: ${e.message}${e.source ? ` (${e.source})` : ''}`),
     ...badCalls.map((c) => `- API lỗi: ${c.method} ${c.url} → ${c.status || c.error || 'lỗi'}`),
     '',
