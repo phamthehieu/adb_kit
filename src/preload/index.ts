@@ -1,0 +1,234 @@
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
+import type {
+  CmdResult,
+  DeviceDetails,
+  DeviceInfo,
+  FileEntry,
+  InstallFlags,
+  MirrorOptions,
+  MirrorStatus,
+  VideoPacket
+} from '../shared/types'
+import type {
+  KbktImport,
+  MockRule,
+  MultiEvent,
+  NetProfile,
+  NetCall,
+  PermissionInfo,
+  RunEvent,
+  RunOptions,
+  Script,
+  ScriptInfo,
+  Suite,
+  SuiteEvent,
+  UiNode
+} from '../shared/automation'
+import type { FPage, FPageRef } from '../shared/figma'
+import type { MiniAppList, OpenTiming, WebPage, WebViewProc } from '../shared/miniapp'
+import type { BugInput, BugResult, BugSnap, Severity } from '../shared/bug'
+import type { JiraCheck, JiraConf, JiraIssue, JiraState } from '../shared/jira'
+import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '../shared/appdata'
+
+export interface CrashEvent {
+  serial: string
+  type: 'crash' | 'anr' | 'native'
+  pkg: string
+  summary: string
+  lines: string[]
+  at: number
+}
+export interface OtpHit {
+  code: string
+  pkg: string
+  title: string
+  seenAt: number
+}
+import type { ConfKey, ConfResult, DevConfig } from '../shared/devconf'
+
+function on<T extends unknown[]>(channel: string, cb: (...args: T) => void): () => void {
+  const listener = (_e: IpcRendererEvent, ...args: unknown[]): void => cb(...(args as T))
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+const invoke = ipcRenderer.invoke.bind(ipcRenderer)
+
+const api = {
+  adbInfo: (): Promise<{ path: string; version: string }> => invoke('adb:info'),
+  installAdb: (): Promise<{ path: string; version: string }> => invoke('adb:install'),
+  listDevices: (): Promise<DeviceInfo[]> => invoke('devices:list'),
+  onDevices: (cb: (list: DeviceInfo[]) => void) => on('devices', cb),
+  details: (serial: string): Promise<DeviceDetails> => invoke('device:details', serial),
+  connect: (addr: string): Promise<CmdResult> => invoke('device:connect', addr),
+  pair: (addr: string, code: string): Promise<CmdResult> => invoke('device:pair', addr, code),
+  disconnect: (serial: string): Promise<CmdResult> => invoke('device:disconnect', serial),
+  enableWifi: (serial: string): Promise<CmdResult> => invoke('device:tcpip', serial),
+  screenshot: (serial: string): Promise<string> => invoke('device:screenshot', serial),
+  disableAutoRotate: (serial: string): Promise<boolean> => invoke('device:disable-auto-rotate', serial),
+  screencap: (serial: string): Promise<Uint8Array> => invoke('device:screencap', serial),
+  reveal: (path: string): Promise<void> => invoke('os:reveal', path),
+
+  mirror: {
+    start: (serial: string, opts: MirrorOptions): Promise<void> => invoke('mirror:start', serial, opts),
+    stop: (): Promise<void> => invoke('mirror:stop'),
+    control: (bytes: Uint8Array): void => ipcRenderer.send('mirror:control', bytes),
+    onVideo: (cb: (p: VideoPacket) => void) => on('mirror:video', cb),
+    onStatus: (cb: (s: MirrorStatus) => void) => on('mirror:status', cb)
+  },
+
+  apk: {
+    pick: (): Promise<string | null> => invoke('apk:pick'),
+    install: (serial: string, path: string, flags: InstallFlags): Promise<CmdResult> =>
+      invoke('apk:install', serial, path, flags)
+  },
+
+  logcat: {
+    start: (serial: string): Promise<void> => invoke('logcat:start', serial),
+    stop: (): Promise<void> => invoke('logcat:stop'),
+    clear: (serial: string): Promise<void> => invoke('logcat:clear', serial),
+    onLines: (cb: (lines: string[]) => void) => on('logcat:lines', cb)
+  },
+  apps: {
+    list: (serial: string): Promise<string[]> => invoke('apps:list', serial),
+    catalog: (serial: string): Promise<{ all: string[]; user: string[] }> => invoke('apps:catalog', serial),
+    foreground: (serial: string): Promise<string | null> => invoke('apps:foreground', serial),
+    pids: (serial: string, pkg: string): Promise<number[]> => invoke('apps:pids', serial, pkg)
+  },
+
+  shell: {
+    start: (serial: string, cols: number, rows: number): Promise<void> => invoke('shell:start', serial, cols, rows),
+    write: (data: string): void => ipcRenderer.send('shell:write', data),
+    stop: (): Promise<void> => invoke('shell:stop'),
+    onData: (cb: (d: string) => void) => on('shell:data', cb),
+    onExit: (cb: (code: number | null) => void) => on('shell:exit', cb)
+  },
+
+  files: {
+    list: (serial: string, path: string): Promise<{ entries: FileEntry[]; error?: string }> =>
+      invoke('files:list', serial, path),
+    remove: (serial: string, path: string): Promise<CmdResult> => invoke('files:remove', serial, path),
+    mkdir: (serial: string, path: string): Promise<CmdResult> => invoke('files:mkdir', serial, path),
+    push: (serial: string, locals: string[], dir: string): Promise<CmdResult> => invoke('files:push', serial, locals, dir),
+    pickAndPush: (serial: string, dir: string): Promise<CmdResult | null> => invoke('files:pick-and-push', serial, dir),
+    pull: (serial: string, remote: string, isDir: boolean): Promise<(CmdResult & { path: string }) | null> =>
+      invoke('files:pull', serial, remote, isDir)
+  },
+
+  automation: {
+    dumpUi: (serial: string): Promise<{ nodes: UiNode[]; width: number; height: number }> => invoke('ui:dump', serial),
+    run: (serial: string, script: Script, opts: RunOptions): Promise<void> => invoke('auto:run', serial, script, opts),
+    stop: (): Promise<void> => invoke('auto:stop'),
+    onEvent: (cb: (e: RunEvent) => void) => on('auto:event', cb),
+    open: (): Promise<{ path: string; script: Script } | null> => invoke('auto:open'),
+    load: (path: string): Promise<Script> => invoke('auto:load', path),
+    save: (script: Script, path: string | null): Promise<string | null> => invoke('auto:save', script, path),
+    openReportsDir: (): Promise<string> => invoke('auto:reports-dir'),
+    compareRuns: (): Promise<string | null> => invoke('auto:compare'),
+    openBaselinesDir: (): Promise<string> => invoke('auto:baselines-dir'),
+    reportStats: (): Promise<{ count: number; bytes: number; oldest: number | null }> => invoke('reports:stats'),
+    cleanReports: (olderThanDays: number): Promise<{ deleted: number; freed: number }> => invoke('reports:clean', olderThanDays)
+  },
+  suite: {
+    run: (serial: string, suite: Suite, opts: RunOptions): Promise<void> => invoke('suite:run', serial, suite, opts),
+    stop: (): Promise<void> => invoke('suite:stop'),
+    onEvent: (cb: (e: SuiteEvent) => void) => on('suite:event', cb),
+    runMulti: (serials: string[], suite: Suite, opts: RunOptions): Promise<void> => invoke('suite:run-multi', serials, suite, opts),
+    stopMulti: (): Promise<void> => invoke('suite:stop-multi'),
+    onMulti: (cb: (e: MultiEvent) => void) => on('multi:event', cb),
+    open: (): Promise<{ path: string; suite: Suite } | null> => invoke('suite:open'),
+    save: (suite: Suite, path: string | null): Promise<string | null> => invoke('suite:save', suite, path),
+    pickScripts: (): Promise<ScriptInfo[]> => invoke('suite:pick-scripts'),
+    scriptInfo: (paths: string[]): Promise<ScriptInfo[]> => invoke('suite:script-info', paths),
+    pickData: (): Promise<{ path: string; rows: number; columns: string[] } | null> => invoke('suite:pick-data'),
+    importKbkt: (): Promise<KbktImport | null> => invoke('kbkt:import'),
+    pickTemplate: (): Promise<string | null> => invoke('kbkt:pick-template'),
+    writeManual: (suite: Suite): Promise<{ path: string; count: number }> => invoke('kbkt:write-manual', suite)
+  },
+  net: {
+    start: (serial: string, pkg: string): Promise<void> => invoke('net:start', serial, pkg),
+    stop: (): Promise<void> => invoke('net:stop'),
+    reload: (serial?: string, pkg?: string): Promise<boolean> => invoke('net:reload', serial, pkg),
+    setMocks: (rules: MockRule[]): Promise<void> => invoke('net:mocks', rules),
+    setProfile: (p: NetProfile | null): Promise<void> => invoke('net:profile', p),
+    cut: (serial: string, seconds: number): Promise<{ until: number }> => invoke('net:cut', serial, seconds),
+    onCalls: (cb: (calls: NetCall[]) => void) => on('net:calls', cb),
+    onInfo: (cb: (msg: string) => void) => on('net:info', cb)
+  },
+  perms: {
+    list: (serial: string, pkg: string): Promise<PermissionInfo[]> => invoke('perm:list', serial, pkg),
+    set: (serial: string, pkg: string, perm: string, grant: boolean): Promise<CmdResult> => invoke('perm:set', serial, pkg, perm, grant),
+    appop: (serial: string, pkg: string, op: string, mode: string): Promise<CmdResult> => invoke('perm:appop', serial, pkg, op, mode),
+    revokeAll: (serial: string, pkg: string): Promise<CmdResult> => invoke('perm:revoke-all', serial, pkg),
+    openSettings: (serial: string, pkg: string): Promise<CmdResult> => invoke('perm:settings', serial, pkg)
+  },
+  figma: {
+    hasToken: (): Promise<boolean> => invoke('figma:has-token'),
+    setToken: (token: string): Promise<void> => invoke('figma:set-token', token),
+    pages: (fileKey: string): Promise<{ fileName: string; pages: FPageRef[] }> => invoke('figma:pages', fileKey),
+    load: (fileKey: string, nodeId: string, refresh = false): Promise<FPage> => invoke('figma:load', fileKey, nodeId, refresh),
+    image: (fileKey: string, nodeId: string): Promise<Uint8Array> => invoke('figma:image', fileKey, nodeId),
+    density: (serial: string): Promise<number> => invoke('device:density', serial)
+  },
+  crash: {
+    watch: (serial: string | null): Promise<void> => invoke('crash:watch', serial),
+    onEvent: (cb: (e: CrashEvent) => void) => on('crash:event', cb)
+  },
+  data: {
+    list: (serial: string, pkg: string): Promise<DataFile[]> => invoke('data:list', serial, pkg),
+    prefs: (serial: string, pkg: string, path: string): Promise<PrefEntry[]> => invoke('data:prefs', serial, pkg, path),
+    savePrefs: (serial: string, pkg: string, path: string, entries: PrefEntry[]): Promise<void> => invoke('data:save-prefs', serial, pkg, path, entries),
+    tables: (serial: string, pkg: string, path: string): Promise<DbTable[]> => invoke('data:tables', serial, pkg, path),
+    query: (serial: string, pkg: string, path: string, sql: string): Promise<DbResult> => invoke('data:query', serial, pkg, path, sql),
+    mmkv: (serial: string, pkg: string, path: string): Promise<MmkvEntry[]> => invoke('data:mmkv', serial, pkg, path)
+  },
+  otp: {
+    start: (serial: string): Promise<void> => invoke('otp:start', serial),
+    poll: (serial: string): Promise<OtpHit[]> => invoke('otp:poll', serial),
+    stop: (serial: string): Promise<void> => invoke('otp:stop', serial)
+  },
+  typeText: (serial: string, text: string): Promise<unknown> => invoke('device:type', serial, text),
+  gps: {
+    set: (serial: string, lat: number, lng: number): Promise<void> => invoke('gps:set', serial, lat, lng),
+    route: (serial: string, from: [number, number], to: [number, number], seconds: number): Promise<void> => invoke('gps:route', serial, from, to, seconds),
+    clear: (serial: string): Promise<void> => invoke('gps:clear', serial),
+    active: (serial: string): Promise<boolean> => invoke('gps:active', serial),
+    search: (query: string, near?: [number, number]): Promise<{ name: string; lat: number; lng: number }[]> => invoke('gps:search', query, near)
+  },
+  rec: {
+    start: (serial: string): Promise<number> => invoke('rec:start', serial),
+    stop: (): Promise<string | null> => invoke('rec:stop')
+  },
+  conf: {
+    get: (serial: string): Promise<DevConfig> => invoke('conf:get', serial),
+    set: (serial: string, key: ConfKey, value: string): Promise<ConfResult> => invoke('conf:set', serial, key, value),
+    restore: (serial: string): Promise<ConfResult> => invoke('conf:restore', serial)
+  },
+  jira: {
+    get: (): Promise<JiraState> => invoke('jira:get'),
+    set: (conf: JiraConf, token?: string): Promise<JiraState> => invoke('jira:set', conf, token),
+    test: (conf?: JiraConf, token?: string): Promise<JiraCheck> => invoke('jira:test', conf, token),
+    create: (input: { summary: string; markdown: string; severity: Severity; dir: string }): Promise<JiraIssue> => invoke('jira:create', input)
+  },
+  openExternal: (url: string): Promise<void> => invoke('os:open-external', url),
+  bug: {
+    snap: (serial: string): Promise<BugSnap> => invoke('bug:snap', serial),
+    save: (id: string, input: BugInput): Promise<BugResult> => invoke('bug:save', id, input),
+    discard: (id: string): Promise<void> => invoke('bug:discard', id)
+  },
+  mini: {
+    webviews: (serial: string): Promise<WebViewProc[]> => invoke('mini:webviews', serial),
+    devtools: (serial: string, socket: string, page: WebPage): Promise<void> => invoke('mini:devtools', serial, socket, page),
+    list: (serial: string, pkg: string): Promise<MiniAppList> => invoke('mini:list', serial, pkg),
+    clearCache: (serial: string, pkg: string, appId: string): Promise<void> => invoke('mini:clear-cache', serial, pkg, appId),
+    openLink: (serial: string, url: string, pkg?: string): Promise<string> => invoke('mini:open-link', serial, url, pkg),
+    measure: (serial: string, pkg: string, url: string, appId?: string, cold?: boolean): Promise<OpenTiming> =>
+      invoke('mini:measure', serial, pkg, url, appId, cold)
+  },
+  openPath: (path: string): Promise<string> => invoke('os:open', path),
+
+  /** Absolute path of a File from a drag & drop event. */
+  pathForFile: (f: File): string => webUtils.getPathForFile(f)
+}
+
+export type Api = typeof api
+contextBridge.exposeInMainWorld('api', api)

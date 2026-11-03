@@ -1,0 +1,273 @@
+# ADB Kit (desktop)
+
+Electron + TypeScript app để mirror, điều khiển và debug thiết bị Android qua ADB.
+
+## Chạy
+
+```bash
+npm install
+npm run dev        # chạy dev, có hot reload
+npm run build      # build vào out/
+npm start          # chạy bản build
+npm run dist       # đóng gói installer Windows (electron-builder)
+```
+
+- Cần `adb`. App tự tìm theo thứ tự: `ADB_PATH`, `ANDROID_HOME`, `%LOCALAPPDATA%\Android\Sdk`, bản ADB Kit tự tải (trong thư mục dữ liệu app), rồi đến `PATH`. Nếu không tìm thấy, app hiện nút **"Tải adb từ Google"** (~8 MB, bản chính thức). Trên Windows, máy vẫn cần **driver USB** của hãng điện thoại.
+- `npm run dist` tạo bộ cài `dist\ADB Kit Setup <version>.exe` (~124 MB, chưa ký số nên Windows SmartScreen sẽ cảnh báo lần đầu).
+- Nếu tiến trình cha có đặt `ELECTRON_RUN_AS_NODE=1` (một số extension của VS Code làm vậy) thì phải bỏ biến này đi, nếu không Electron sẽ chạy như Node thuần.
+- Muốn xem log debug của luồng mirror: đặt `ADBKIT_DEBUG=1`.
+
+## Chức năng
+
+- **Thiết bị:** tab cho từng máy (USB / Wi-Fi), kết nối và pair qua Wi-Fi (nút `+`), nút "Switch to Wi-Fi" (`adb tcpip 5555`).
+- **Mirror và điều khiển:** dùng scrcpy-server 5.0.1, stream H.264, giải mã bằng WebCodecs (GPU).
+  - Chuột trái = chạm/vuốt, cuộn chuột = cuộn, gõ phím = nhập chữ, Ctrl+V = dán clipboard của PC.
+  - Chuột phải = Back, chuột giữa = Home.
+  - Có nút nguồn, âm lượng, xoay màn hình, kéo thanh thông báo, chụp màn hình (lưu vào `Pictures\ADB Kit`).
+  - Kéo thả file APK vào màn hình điện thoại để cài; file khác sẽ được copy vào `/sdcard/Download`.
+  - **Xoay:** chuyển dọc ⇄ ngang, tự tắt auto-rotate (nếu không, cảm biến sẽ xoay ngược lại ngay). App báo rõ khi màn hình hiện tại bị khóa chiều (ví dụ màn hình chính của Samsung). Khung hiển thị tự co giãn theo chiều xoay.
+  - **Tắt màn hình máy (nút gạch chéo màn hình):** màn hình thật tắt nhưng vẫn mirror và điều khiển được từ PC. Cài đặt này được ghi nhớ, tự áp dụng lại sau khi bấm nút nguồn hoặc xoay, và màn hình tự sáng lại khi dừng mirror. Lưu ý: khi cắm USB thì máy được giữ thức; khi dùng qua Wi-Fi, máy vẫn có thể ngủ theo thời gian tắt màn hình đã cài trên máy.
+- **Bố cục:** Files, Quyền và Install mở bên trái điện thoại; Logcat, Shell, Mạng/API và Tự động test mở bên phải.
+- **Mạng / API** (app WebView bản build debug):
+  - Theo dõi trực tiếp request HTTP (fetch/XHR…): status, thời gian, nội dung gửi/nhận.
+  - Với **app Tauri**: hiện cả các **lệnh JS → Rust** (`plugin:sql|select` kèm câu SQL, lệnh riêng của app…) và giải mã request của plugin HTTP chạy bên Rust. Để làm được, ADB Kit chèn một đoạn móc trong bộ nhớ vào `window.ipc`; đoạn này mất khi app khởi động lại.
+  - "Tải lại app" để bắt cả những gì app gọi lúc khởi động. "Tạo bước kiểm tra" để thêm bước "Kiểm tra API" vào kịch bản.
+- **Quyền:** xem quyền runtime (có công tắc cấp/thu hồi), quyền đặc biệt (chọn chế độ appops), quyền tự cấp khi cài, và **lần dùng gần nhất**. Có nút "Thu hồi tất cả" và "Cài đặt app". Lưu ý: thu hồi quyền runtime thì Android sẽ tắt app.
+- **Automation (cho tester):**
+  - **Record:** thao tác trên màn hình mirror (chạm, giữ, vuốt, cuộn, gõ phím, Back/Home...) được ghi thành các bước. Khoảng nghỉ giữa các thao tác thành bước `Wait`; các ký tự gõ liên tiếp được gộp thành một bước. Tọa độ được lưu theo tỷ lệ 0..1 nên chạy được trên máy có độ phân giải khác. Khi có thể, mỗi lần chạm còn ghi lại phần tử bên dưới (id/text) để lúc phát lại tìm đúng phần tử ("Smart targets").
+  - **Inspect:** bấm vào một phần tử trên màn hình để xem class/id/text, rồi thêm bước Tap / Wait for / Assert visible / Assert gone.
+  - **Các bước khác:** Launch app (có tùy chọn xóa dữ liệu), Force-stop, Wait, Type text, các phím, Screenshot.
+  - **Run:** chạy lặp N lần, chỉnh tốc độ, dừng khi có crash hoặc kiểm tra thất bại. Nếu đang mirror thì thao tác đi qua scrcpy, nếu không thì dùng `adb shell input`.
+  - **Auto debug:** trong lúc chạy, logcat được theo dõi để bắt crash Java (`FATAL EXCEPTION`), ANR và native crash của app được kiểm thử.
+  - Mỗi lần chạy xuất một báo cáo vào `Documents\ADB Kit\reports\<thời gian>_<tên>\`: `report.html` (kết quả, crash + stack trace, thông tin máy, các bước tái hiện, ảnh chụp, logcat), `logcat.txt`, `script.json`, ảnh `.png`.
+  - Kịch bản lưu dạng `.json` (mặc định trong `Documents\ADB Kit\tests`).
+  - **Kiểu so khớp chữ:** `đúng y` / `chứa` / `bắt đầu bằng` (ví dụ tab "5 Từ vựng" → chứa "Từ vựng").
+  - **Nếu thấy thì bấm:** dùng cho popup lúc có lúc không; không thấy thì tự bỏ qua (cảnh báo, không làm test lỗi).
+  - **Tăng tốc:** các bước kiểm tra liền nhau dùng chung một lần đọc màn hình (~2 giây/lần đọc).
+  - **Quay video** (`screenrecord --bugreport`, có dấu thời gian, tự nối nhiều đoạn 3 phút) và đính kèm vào báo cáo.
+  - **Bộ test (tab "Bộ test"):** gom nhiều kịch bản `.json`, mỗi kịch bản là một testcase. Có thể đặt **nhóm** (dòng vàng trong KBKT) và gắn file **CSV** để chạy một kịch bản với nhiều bộ dữ liệu (dùng `${tên_cột}` trong các bước, mỗi dòng CSV là một testcase). Có tùy chọn **chạy lại khi lỗi** (kết quả ghi vào KQ lần 2/3) và **tắt hẳn app trước mỗi testcase**. Đường dẫn trong file bộ test được lưu tương đối, nên copy cả thư mục `tests` sang máy khác vẫn chạy được.
+  - **Kết quả bộ test:** `tong-hop.html` cùng file **`KBKT_<tên>.xlsx` theo mẫu KBKT của BES** (`resources/templates/template_KBKT_BES.xlsx`): D2–D5 là thông tin chung, nhóm tô vàng, Mục đích / Các bước / Kết quả mong muốn tự sinh (hoặc lấy từ nút "KBKT" trong tab Kịch bản), KQ lần 1/2/3 là P/F, cột Ghi chú có link tới báo cáo chi tiết.
+  - **Bước kiểm tra API:** URL/lệnh chứa…, method, status, kết quả chứa…; chỉ xét các lời gọi xảy ra sau thao tác trước đó. Có cả kiểu "KHÔNG được gọi". Báo cáo có bảng mọi API/lệnh theo từng bước, kèm file `api.har` (mở bằng Chrome DevTools → Network → Import).
+  - **Bước quyền:** kiểm tra quyền đang cấp/từ chối, cấp/thu hồi, thu hồi tất cả (như mới cài), đặt quyền đặc biệt. Báo cáo liệt kê quyền app đã dùng trong lúc test.
+  - **Bước chuẩn bị môi trường:** bật/tắt Wi-Fi và 4G, cấp/thu quyền, mở deep link, lệnh adb shell (có kiểm tra kết quả).
+  - **Bắt lỗi WebView:** với app build debug, kết nối DevTools của WebView (`webview_devtools_remote_<pid>`) để ghi lại exception JS (kèm stack), `console.error`, request mạng lỗi / HTTP ≥ 400, và bước đang chạy lúc đó. Có tùy chọn "Lỗi JS = test lỗi".
+- **Logcat:** lọc theo mức log, tìm kiếm (phân biệt hoa thường / regex), lọc theo app (package → PID, tự cập nhật khi app khởi động lại), tạm dừng, xóa, tự cuộn theo log mới.
+- **Files:** cây thư mục, upload/download, tạo thư mục, xóa, kéo file từ PC thả vào để upload.
+- **Shell:** terminal tương tác (xterm.js + `adb shell -tt`).
+- **Install APK:** các tùy chọn `-r`, `-d`, `-g`, `-t`, có lịch sử các lần cài.
+
+## Đợt 2: so sánh ảnh, giả lập lỗi, báo lỗi, chạy từ dòng lệnh
+
+- **So sánh màn hình với ảnh chuẩn** (bước "So sánh màn hình"):
+  - Lần chạy đầu lưu màn hình làm ảnh chuẩn; các lần sau so từng điểm ảnh, báo lỗi nếu lệch quá ngưỡng (mặc định 1–2%).
+  - Mặc định bỏ qua thanh trạng thái và thanh điều hướng.
+  - Báo cáo hiện ảnh chuẩn, ảnh hiện tại và ảnh khác biệt (tô đỏ) cạnh nhau.
+  - Ảnh chuẩn lưu ở `Documents\ADB Kit\baselines\<kịch bản>\<dòng máy>\`. Tùy chọn **"Cập nhật ảnh chuẩn"** dùng khi giao diện được đổi có chủ đích.
+- **Giả lập lỗi API** (bước "Giả lập…", hoặc trực tiếp trong panel Mạng):
+  - Request HTTP từ WebView: trả status tùy ý (500…), lỗi mạng, hoặc chậm.
+  - Lệnh Tauri (JS → Rust): bị từ chối, trả kết quả giả, hoặc chậm.
+  - Bước **"Tải lại giao diện app"** để áp dụng giả lập ngay từ lúc khởi động.
+  - Giả lập tự gỡ khi kết thúc chạy và tự hết hạn sau 15 phút. Lời gọi bị giả lập được gắn nhãn **GIẢ**.
+- **Báo lỗi một chạm**: lần chạy lỗi sẽ có `bao-loi.md` và nút **"Chép nội dung báo lỗi"** (trong app và trong report.html), gồm tiêu đề, môi trường (máy, Android, phiên bản app), bước tái hiện, kết quả mong muốn/thực tế, lỗi JS/API liên quan, đường dẫn đính kèm. Dán thẳng vào Jira / Redmine.
+- **Chạy từ dòng lệnh** (CI, chạy hằng đêm) — không mở cửa sổ:
+
+  ```bat
+  "ADB Kit.exe" --run "D:\tests\BoTest_MyEnglish.json" [--serial <máy>] [--out <thư mục>] [--no-video]
+  rem bản dev:  npm run build && npm run cli -- "D:\tests\kich_ban.json"
+  ```
+
+  Nhận cả kịch bản lẫn bộ test. In tiến trình ra terminal, ghi `ket-qua.json`, **mã thoát** 0 = đạt, 1 = có lỗi, 2 = không chạy được. Bộ test vẫn xuất file KBKT như khi chạy trong app.
+
+## Đợt 3: vùng bỏ qua, hiệu năng, KBKT
+
+- **Khoanh vùng bỏ qua** cho bước "So sánh màn hình": bấm nút **"Vùng bỏ qua"** trên bước, rồi kéo chuột khoanh ngay trên màn hình điện thoại các vùng hay thay đổi (ngày giờ, lời chào, quảng cáo…). Lúc vẽ không gửi thao tác nào tới máy.
+- **Đo hiệu năng** (tùy chọn "Đo hiệu năng", bật sẵn):
+  - Bước "Mở app" đo **thời gian mở app** (`am start -W`, phân biệt khởi động nguội).
+  - Trong lúc chạy, lấy mẫu **RAM** (PSS) và **CPU** của app mỗi 2 giây; cuối lần chạy đọc **tỉ lệ khung hình giật** (`dumpsys gfxinfo`, kèm p90/p99).
+  - Báo cáo có thẻ tóm tắt và biểu đồ RAM/CPU theo thời gian, có vạch đánh dấu từng bước.
+  - Bước "Hiệu năng: … ≤ ngưỡng" (mở app ms, RAM MB, CPU %, giật %) để test báo lỗi khi vượt ngưỡng.
+- **Mẫu KBKT**: chọn **BES**, **BCCS**, hoặc **file mẫu riêng** cho file KBKT xuất ra từ bộ test. App tự nhận dạng cấu trúc BES/BCCS theo dòng tiêu đề. Với BCCS (chỉ có 1 cột Result), các lần chạy lại và lý do lỗi được ghi vào ghi chú (comment) của ô.
+- **Nhập testcase từ file KBKT có sẵn** (tab Bộ test → "Nhập testcase từ file KBKT…"):
+  - Đọc mọi sheet đúng mẫu BES/BCCS, chia theo nhóm.
+  - Mỗi dòng **gắn kịch bản tự động**, hoặc **đánh kết quả test tay** (P / F / PE).
+  - Khi chạy bộ test, kết quả tự động và test tay được ghi vào **một bản sao** của file trong thư mục báo cáo (file gốc không đổi). Nút "Ghi kết quả test tay" ghi ngay mà không cần chạy.
+
+## API của app native (Chucker)
+
+App Android native (Kotlin/Java dùng OkHttp) không có WebView nên không bắt API qua DevTools được. Nếu bản debug/staging của app có gắn **Chucker** (thông báo "Recording HTTP activity"), ADB Kit đọc thẳng file `databases/chucker.db` của app qua `run-as`:
+
+- Tab **Mạng / API** tự nhận ra, nhãn **HTTP·App**: method, URL, mã trạng thái, thời gian, header và body gửi/nhận, lỗi kết nối (timeout…). Danh sách cập nhật mỗi giây; lời gọi đang chờ tự chuyển sang kết quả khi xong.
+- **Tải lại app** với app native = khởi động lại app để bắt cả API lúc mở app.
+- Bước **"Kiểm tra API"** trong kịch bản và file `api.har` của báo cáo cũng dùng được (có header).
+- Chỉ đọc bản sao của database, không ghi gì vào app. Cần app **debuggable** (bản release không đọc được).
+- Chưa hỗ trợ **giả lập lỗi API** cho app native (cần proxy + chứng chỉ).
+
+## So với Figma (đo kích thước, khoảng cách)
+
+Tab **So với Figma**: so một phần tử trên máy thật với node tương ứng trong thiết kế Figma, theo dp.
+
+1. Lần đầu: nhập **Figma Personal Access Token** (Figma → Settings → Security → Personal access tokens, quyền `File content: Read-only`). Token được mã hóa (DPAPI) và chỉ lưu trên máy này. Khi chạy dev, nếu có file `.figma-token` cạnh `package.json` thì app dùng luôn file đó.
+2. Dán link Figma (link tới một trang hoặc một section/frame, có `node-id`) rồi bấm **Mở**. App lấy mọi frame cỡ màn hình điện thoại (rộng 320–480). Trang lớn có thể mất khoảng 1 phút ở lần đầu. Sau đó dữ liệu được lưu sẵn (đã bỏ vector, khoảng 1 MB cho ~100 màn) nên mở lại gần như ngay. Muốn lấy thiết kế mới thì bấm nút tải lại.
+3. Chọn frame trong danh sách (nhóm theo section, có ô lọc), hoặc bấm **Tìm màn giống**: app đọc chữ trên màn hình điện thoại và gợi ý các frame có nhiều chữ trùng nhất.
+4. Bật **Theo dõi** rồi bấm vào phần tử trên màn mirror. Lúc này cú bấm **không** đi vào app mà chỉ dùng để đo; muốn thao tác thật thì giữ **Alt** khi bấm. Cuộn chuột, phím và các nút Back/Home vẫn gửi vào máy như thường. App tự tìm node Figma tương ứng, trước hết theo chữ, sau đó theo chữ bên trong, cuối cùng theo vị trí so với chữ gần nhất. Nếu tìm sai, bấm thẳng lên ảnh Figma để chọn tay. Khi màn hình điện thoại đổi (do Alt + bấm, cuộn, hoặc app tự chuyển màn), frame Figma tự đổi theo.
+   - Kéo thanh dọc giữa điện thoại và panel, hoặc giữa ảnh Figma và bảng số đo, để đổi độ rộng. Bấm đúp vào thanh để về mặc định.
+5. Bảng so sánh: rộng/cao, lề trong phần tử cha, khoảng cách tới phần tử trên/dưới/trái/phải, khoảng cách tới mép màn hình. Ô nào lệch quá **sai số** (mặc định 2dp) thì tô đỏ. Phần tử cha và phần tử kế bên cũng được ghép cặp sang Figma, nên hai bên luôn đo tới cùng một phần tử. Có kèm thông số thiết kế: cỡ chữ, màu, bo góc, auto layout (gap/padding), cách co giãn.
+
+Lưu ý:
+
+- Không so toạ độ tuyệt đối, vì thiết kế thường vẽ trên khung iPhone (393×852, status bar 50) còn máy thật có kích thước khác. Nếu chiều rộng lệch nhưng hai mép trái/phải khớp, app ghi "giãn theo màn" chứ không báo lỗi. Với chữ, khung TextView thường giãn hết chiều ngang nên độ rộng chỉ được ghi chú, không tính là lỗi.
+- Các thanh hệ thống vẽ trong thiết kế (Status Bar, Home Indicator, bàn phím) không được dùng làm phần tử kế bên.
+- App Jetpack Compose không có `resource-id`, nên app ghép cặp theo chữ. Nếu dev bật `testTagsAsResourceId` và đặt `testTag` trùng tên layer Figma thì sẽ ghép chính xác hơn (chưa dùng ở bản này).
+
+## Đợt 4: OTP, dữ liệu app, crash nền, quay video, GPS, nhiều máy, so sánh bản build
+
+- **OTP & tài khoản test** (tab **Dữ liệu**): "Chờ mã OTP" đọc mã mới trong thông báo của điện thoại (`dumpsys notification`, chỉ lấy mã 4–8 chữ số gần chữ OTP / mã / code; thông báo đã có trước đó bị bỏ qua). Có nút **Điền** hoặc chế độ **Tự điền**. Bước kịch bản **"Chờ mã OTP rồi điền"** giúp tự động hóa luồng đăng nhập OTP. Danh sách tài khoản test điền một chạm (lưu trên máy tính này).
+- **Dữ liệu app** (tab **Dữ liệu**, app debug, qua `run-as`):
+  - **SharedPreferences**: xem, sửa, thêm, xóa khóa. Khi lưu, app được đóng trước, file đi qua `/data/local/tmp` rồi bị xóa ngay.
+  - **SQLite**: kéo bản sao kèm WAL, chỉ cho chạy SELECT / WITH / PRAGMA, tối đa 500 dòng.
+  - **MMKV**: chỉ xem, giải mã theo kiểu đoán; file mã hóa thì báo là không đọc được.
+- **Tự bắt crash / ANR**: theo dõi logcat của máy đang hiển thị. Khi có crash Java / native hoặc ANR, app chụp ngay ảnh, giữ video 20–40 giây trước đó, log và crash, rồi hiện thông báo kèm nút **Tạo báo cáo lỗi** (hộp thoại Báo lỗi điền sẵn). Mỗi app báo tối đa một lần mỗi 30 giây; trong lúc chạy test thì bỏ qua (runner tự ghi).
+- **Quay video màn hình**: nút máy quay cạnh màn hình điện thoại, dùng `screenrecord` của máy (MP4), lưu vào `Videos/ADB Kit`.
+- **Vị trí GPS giả lập** (tab Soát UI, Android 12+): **chọn trên bản đồ**, kéo để di chuyển và cuộn để phóng to. Có hai chế độ: đặt một điểm, hoặc bấm A rồi B để đi thẳng A → B trong N giây (hiện quãng đường, tốc độ, và chấm vị trí chạy theo).
+  - Tìm địa chỉ qua Photon (dự phòng Nominatim), có ô dán tọa độ và các địa điểm có sẵn.
+  - Bản đồ là component tự viết, không dùng thư viện. Ảnh bản đồ lấy từ OpenStreetMap France, tự chuyển sang Esri / tile.openstreetmap.org nếu mạng chặn nguồn trước, và gửi kèm User-Agent định danh ADB Kit. Dùng lệnh có sẵn `cmd location providers` (không cần cài app phụ) và tự tắt khi đóng ADB Kit. Máy cũ hơn sẽ được hướng dẫn dùng app Fake GPS.
+- **Chạy trên nhiều máy** (Bộ test › "Nhiều máy…"): mỗi máy một `SuiteRunner` chạy song song (máy đang hiển thị dùng mirror, máy khác dùng `adb input`), mỗi máy có báo cáo và KBKT riêng, và một trang `tong-hop.html` testcase × máy, tô vàng các testcase có kết quả khác nhau giữa các máy.
+- **So sánh 2 lần chạy** (cuối tab Tự động test): mỗi lần chạy giờ lưu thêm `report.json`. Chọn thư mục lần trước và lần này để tạo `so-sanh.html` gồm:
+  - bước mới lỗi / đã hết lỗi / chậm hơn;
+  - hiệu năng;
+  - API theo endpoint (gộp id): mới, không còn gọi, mới lỗi, chậm hơn;
+  - ảnh chụp cùng tên so từng điểm ảnh, kèm ảnh khác biệt;
+  - lỗi JS mới.
+
+## Hướng dẫn trong app
+
+Nút **Hướng dẫn** trên thanh công cụ (đọc được cả khi chưa cắm điện thoại):
+
+- Mục lục theo từng tính năng, có ô tìm kiếm; mỗi mục có các bước dùng, mẹo và lưu ý. Cuối mục lục là danh sách phím tắt.
+- **Chỉ cho tôi**: làm tối cửa sổ, khoanh sáng đúng nút / vùng cần dùng và giải thích từng bước (Tiếp / Trước / Bỏ qua, phím ← → Enter Esc). Bảng liên quan được tự mở.
+- Lần đầu mở ADB Kit có điện thoại kết nối sẽ tự chạy tour giới thiệu ngắn (chỉ một lần).
+- Nội dung nằm trong `src/renderer/src/lib/help.ts`: thêm mục mới hoặc bước tour mới chỉ cần sửa file này (bước tour trỏ bằng CSS selector hoặc chữ trên nút).
+
+## Soát UI: đổi cấu hình nhanh + soát màn hình
+
+Tab **Soát UI** dùng để kiểm tra app có vỡ giao diện khi người dùng đổi thiết lập máy hay không.
+
+**Cấu hình máy** (bấm là đổi ngay):
+
+- **Chế độ tối** sáng/tối. Một số máy (như Samsung One UI) khóa thiết lập này: ADB Kit tự trả lại như cũ và mở trang **Cài đặt › Màn hình** trên điện thoại để bật tay.
+- **Cỡ chữ** 0.85× đến 2×.
+- **Kích thước hiển thị** (mật độ màn hình) Nhỏ / Mặc định / Lớn / Rất lớn.
+- **Hiệu ứng chuyển động** tắt / 0.5× / bình thường; tắt đi giúp test tự động ổn định hơn.
+- **Hiện viền layout**, **Hiện điểm chạm**.
+- Giá trị gốc được ghi nhớ theo từng máy (kể cả sau khi tắt ADB Kit). Nút **Khôi phục (N)** đưa mọi thiết lập đã đổi về đúng như lúc đầu, với mật độ màn hình là trả về đúng con số cũ chứ không "reset" (trên Samsung, `wm density reset` nhảy về mật độ gốc của tấm nền, làm giao diện nhỏ đi).
+
+**Soát màn hình này**: đọc cây giao diện và chụp màn hình rồi báo:
+
+- vùng bấm nhỏ hơn **48×48 dp** (dưới 32 dp là lỗi nặng);
+- nút bấm được nhưng **không có nhãn** (TalkBack không đọc được);
+- **chữ đè lên nhau**, hai vùng bấm chồng nhau;
+- chữ bị cắt "…", chữ **tràn ra ngoài khung**, chữ sát mép màn hình;
+- **tương phản chữ** thấp theo WCAG (dưới 4.5:1, chữ lớn dưới 3:1), đo từ màu thật trên ảnh chụp, bỏ qua chữ nằm trên ảnh/gradient.
+
+Rê chuột hoặc bấm vào từng mục để khoanh phần tử trên màn hình điện thoại. Nút **Thử chữ to 1.3× + soát** làm cả hai bước một lần. Khi đã có kết quả, đổi cấu hình nào cũng tự soát lại. Đây là kiểm tra theo kinh nghiệm, nên xem lại bằng mắt trước khi báo lỗi. Màn hệ thống (màn khóa, thanh thông báo) không được soát.
+
+## Báo lỗi nhanh (F8)
+
+Tester gặp lỗi khi đang thao tác tay thì bấm **Báo lỗi** trên thanh công cụ, hoặc phím **F8**. Ngay lúc bấm, trước khi tester kịp gõ gì, ADB Kit lưu lại:
+
+- **ảnh màn hình**, **video 20–40 giây gần nhất** của màn mirror (luôn quay sẵn ở 8 fps, chỉ ghi ra đĩa khi tạo báo cáo; tốn thêm khoảng 4% một nhân CPU, tắt được bằng ô "Quay sẵn video");
+- **các thao tác vừa làm** trên màn mirror (bấm, vuốt, cuộn, gõ chữ, phím) làm "Các bước tái hiện";
+- **logcat** (toàn máy và riêng app), **crash** trong 10 phút gần nhất, **cây giao diện** (`ui.json`), app và màn đang mở;
+- **API và lệnh bridge** 5 phút gần nhất kèm lỗi JS, nếu tab **Mạng / API** đang theo dõi app đó (`api.har`, `calls.json`).
+
+Tester chỉ cần nhập tiêu đề, mức độ, kết quả thực tế và mong muốn, rồi bấm **Tạo báo cáo** (Ctrl + Enter). Nội dung lỗi dạng Markdown được **tự sao chép** để dán vào Jira, Redmine hoặc Teams. Báo cáo gồm thư mục `Documents/ADB Kit/reports/<thời điểm>_bao-loi` với `report.html` và một file **zip** để đính kèm ticket. Bấm Hủy thì thư mục tạm bị xóa. Báo cáo cũ được dọn cùng chức năng "Dọn báo cáo cũ".
+
+## Miniapp (super app)
+
+Tab **Miniapp** dành cho dev và tester làm super app có miniapp chạy trên WebView, ví dụ Tammi (container Capacitor, tương thích WindVane).
+
+- **WebView đang mở**: liệt kê mọi trang WebView có thể soi trên máy, theo từng app. Danh sách tự cập nhật mỗi 3 giây khi miniapp được mở hoặc đóng. Chấm xanh nghĩa là trang đang hiển thị. Bấm **DevTools** để mở Chrome DevTools đầy đủ cho trang đó (Elements, Console, Network, Sources, Application…) trong một cửa sổ riêng, không cần mạng và không cần `chrome://inspect`. Bỏ tick "Chỉ app đã chọn" để thấy cả Chrome và các app khác.
+- **Miniapp đã tải về máy**: tên, appId, phiên bản, dung lượng gói và lần cập nhật, đọc từ dữ liệu của app qua `run-as` (cần app **debuggable**). Có hai nút:
+  - **Mở**: mở thẳng miniapp bằng deep link theo mẫu (Tammi: `tammi://miniapp?appId={appId}`; mẫu sửa được và được nhớ theo từng app).
+  - **Xóa cache**: đóng app và xóa gói đã tải, để lần mở sau app tải lại bản mới nhất từ server.
+- **Mở link nhanh**: lưu sẵn các deep link hoặc URL, một cú bấm là vào thẳng màn cần test.
+- **Theo dõi API & bridge**: chuyển sang tab **Mạng / API** cho app này. Ngoài request HTTP của WebView, tab còn thấy:
+  - **Bridge**: miniapp gọi hàm native (JSAPI), ví dụ `WVUI.toast` hoặc `WVUser.getUserInfo`, kèm tham số và kết quả hoặc lỗi.
+  - **HTTP·Bridge**: API mà miniapp gọi qua native (`WVFetch.request`). Các API khác domain của miniapp đi đường này nên **không** hiện trong Network của WebView/DevTools; ADB Kit bắt được vì móc vào bridge.
+  - **Sự kiện**: native báo cho miniapp (ví dụ app ra nền hoặc vào lại).
+  - Cột tên trang cho biết lời gọi đến từ miniapp nào. Giả lập lỗi, 500 hoặc chậm và bước "Kiểm tra API" trong kịch bản đều dùng được với lời gọi bridge.
+
+- **Thời gian mở miniapp**: bấm ⏱ ở dòng miniapp (hoặc ở link nhanh). ADB Kit mở miniapp bằng deep link, chờ WebView mới, rồi đọc mốc thời gian của chính trang đó (đồng hồ máy được căn theo PC):
+  - **Container + WebView**: từ lúc mở đến khi trang bắt đầu tải, gồm xử lý link, tải/giải nén gói và tạo WebView.
+  - **Tải HTML**, **Dựng trang (DOM)**, **Tải tài nguyên (load)**, **Đến khi mạng yên**, cùng mốc **FCP / LCP** nếu trình duyệt ghi được.
+  - Số tài nguyên, dung lượng tải qua mạng và 5 tài nguyên chậm nhất.
+  - Tick **Như lần đầu** để xóa gói và khởi động lại app trước khi đo (như lần mở đầu sau khi cài hoặc cập nhật).
+  - Lịch sử đo được lưu trên máy để so sánh giữa các phiên bản và giữa lần đầu với lần có cache.
+  - API gọi qua bridge (`WVFetch`) không nằm trong số liệu tài nguyên của trang.
+
+Lưu ý: hook chỉ nằm trong bộ nhớ của trang, không sửa gì trong app; app tải lại mà không có ADB Kit thì hook mất. Cần bản build có bật debug WebView (bản debug/staging).
+
+## Giả lập mạng xấu
+
+Trong tab **Mạng / API**:
+
+- **Giả lập mạng cho app**: Chậm (như 3G yếu), Chập chờn (30% lời gọi lỗi, còn lại trễ ngẫu nhiên), Mất mạng. Áp cho **mọi API** của app đang theo dõi: fetch/XHR của WebView (file của trang không bị ảnh hưởng), API miniapp qua bridge (`WVFetch`), HTTP của Tauri. Lời gọi bị ảnh hưởng có nhãn **MẠNG**. Tự hết sau 15 phút, và tắt khi ngừng theo dõi.
+- **Mất mạng thật cả máy** 5–60 giây: tắt Wi-Fi và dữ liệu di động rồi tự bật lại. Áp cho mọi app, kể cả app native. Lệnh bật lại chạy ngay trên điện thoại, nên mạng vẫn về kể cả khi ADB Kit bị tắt giữa chừng. Chỉ dùng được khi cắm cáp USB (nối adb qua Wi-Fi mà tắt Wi-Fi thì mất kết nối).
+
+## Tạo ticket Jira
+
+Sau khi tạo báo cáo lỗi (F8), bấm **Tạo ticket Jira**: ADB Kit tạo ticket kèm mô tả (định dạng Jira), ảnh màn hình (hiện ngay trong ticket) và file zip.
+
+- Lần đầu cần nhập: địa chỉ Jira, e-mail + **API token** (Jira Cloud) hoặc để trống e-mail và dùng **Personal Access Token** (Jira Server / Data Center), mã dự án, loại ticket. Bấm **Kiểm tra kết nối** để xem tên tài khoản, dự án và chọn loại ticket có sẵn.
+- Token được mã hóa bằng Windows (DPAPI) và chỉ gửi tới địa chỉ Jira đã nhập. Địa chỉ phải là `https://`.
+- Mức độ lỗi được đổi thành Priority (Highest/High/Medium/Low). Nếu dự án không cho đặt Priority khi tạo, ticket vẫn được tạo, chỉ không có Priority.
+
+## An toàn khi dùng cho tester
+
+- **Giao diện tiếng Việt** toàn bộ.
+- **Lỗi một panel không làm sập cả app**: panel đó hiện thông báo kèm nút "Thử lại"; kịch bản và bộ test luôn được tự lưu.
+- **Hỏi xác nhận trước khi chạy** nếu kịch bản hoặc bộ test có bước thay đổi dữ liệu/thiết lập: xóa dữ liệu app, thu hồi quyền, quyền đặc biệt, tắt mạng, hoặc lệnh shell có ghi/xóa. Lệnh chỉ đọc như `getprop`, `dumpsys` không bị hỏi.
+- **Khóa thao tác tay trên màn hình mirror khi đang chạy test**, để tester không vô tình làm sai kết quả. Vẫn có nút "Vẫn cho phép thao tác tay".
+- **Dọn báo cáo cũ**: xem dung lượng và xóa báo cáo cũ hơn N ngày (cuối panel Tự động test). Chỉ xóa trong thư mục báo cáo của ADB Kit.
+- **Khi ghi thao tác**, có dòng báo "✓ Sẵn sàng" lúc lần chạm tiếp theo sẽ được gắn với phần tử. Chữ có số huy hiệu (như "5 Từ vựng") tự chuyển sang so khớp kiểu "chứa".
+
+## Cấu trúc
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `src/main/adb.ts` | tìm adb, chạy lệnh, liệt kê thiết bị |
+| `src/main/scrcpy.ts` | phiên scrcpy: push server, adb forward, đọc gói video, gửi lệnh điều khiển |
+| `src/main/services.ts` | logcat, shell, files, cài APK, danh sách app |
+| `src/main/index.ts` | cửa sổ và các IPC handler |
+| `src/main/figma.ts` | Figma REST API: token, tải trang (rút gọn, có cache), ảnh frame |
+| `src/renderer/src/lib/figmaMeasure.ts` | ghép phần tử app ↔ node Figma, đo kích thước/khoảng cách, gợi ý frame |
+| `src/renderer/src/components/FigmaPanel.tsx` | tab So với Figma |
+| `src/main/miniapp.ts` | WebView trên máy, mở DevTools, đọc/xóa cache miniapp, mở deep link |
+| `src/main/bridgeHook.ts` | script móc vào bridge Capacitor/WindVane để thấy lệnh JSAPI và `WVFetch` |
+| `src/renderer/src/components/MiniAppPanel.tsx` | tab Miniapp |
+| `src/main/bugquick.ts` | báo lỗi nhanh: chụp bằng chứng, ghi report.html / bug.md / zip |
+| `src/renderer/src/lib/rollingVideo.ts` | quay sẵn video vòng lặp từ màn mirror |
+| `src/renderer/src/components/BugDialog.tsx` | hộp thoại Báo lỗi |
+| `src/main/devconf.ts` | đổi / khôi phục cấu hình máy (chế độ tối, cỡ chữ, mật độ, hiệu ứng…) |
+| `src/renderer/src/lib/uiLint.ts` | luật soát giao diện: vùng bấm, nhãn, chữ đè/cắt, tương phản |
+| `src/renderer/src/components/CheckPanel.tsx` | tab Soát UI |
+| `src/main/jira.ts` | Jira REST v2: cấu hình, kiểm tra kết nối, tạo ticket + đính kèm |
+| `src/renderer/src/components/JiraBox.tsx` | khung Jira trong hộp thoại Báo lỗi |
+| `src/renderer/src/lib/help.ts` | nội dung hướng dẫn và các bước tour |
+| `src/main/otp.ts` | đọc mã OTP mới từ thông báo |
+| `src/main/appdata.ts` | SharedPreferences / SQLite / MMKV của app debug |
+| `src/main/gps.ts` | vị trí GPS giả lập (Android 12+) |
+| `src/main/multirun.ts` | chạy bộ test trên nhiều máy + bảng tổng hợp |
+| `src/main/compare.ts` | so sánh 2 lần chạy (so-sanh.html) |
+| `src/renderer/src/components/DataPanel.tsx`, `MultiRunBox.tsx` | tab Dữ liệu, khung chạy nhiều máy |
+| `src/renderer/src/components/HelpPanel.tsx`, `Tour.tsx` | tab Hướng dẫn và lớp phủ "Chỉ cho tôi" |
+| `src/preload/index.ts` | API `window.api` cho renderer |
+| `src/renderer/src/lib/control.ts` | đóng gói nhị phân các lệnh điều khiển của scrcpy |
+| `src/renderer/src/lib/player.ts` | giải mã H.264 và vẽ lên canvas |
+| `src/renderer/src/components/` | TopBar, ScreenView, Logcat, Files, Shell, Install |
+| `resources/scrcpy-server` | server của scrcpy (Apache-2.0); phiên bản phải khớp `SCRCPY_VERSION` |
+
+## Ghi chú
+
+Một số máy (ví dụ Galaxy S9 / Android 10) chỉ gửi khung hình khi nội dung màn hình thay đổi.
+Vì vậy app hiển thị ảnh `screencap` tạm thời cho đến khi khung video đầu tiên tới.
