@@ -11,6 +11,8 @@ import type {
 } from '../shared/types'
 import type {
   KbktImport,
+  FreshMode,
+  FreshPerms,
   MockRule,
   MultiEvent,
   NetProfile,
@@ -168,6 +170,7 @@ const api = {
     set: (serial: string, pkg: string, perm: string, grant: boolean): Promise<CmdResult> => invoke('perm:set', serial, pkg, perm, grant),
     appop: (serial: string, pkg: string, op: string, mode: string): Promise<CmdResult> => invoke('perm:appop', serial, pkg, op, mode),
     revokeAll: (serial: string, pkg: string): Promise<CmdResult> => invoke('perm:revoke-all', serial, pkg),
+    fresh: (serial: string, pkg: string, mode: FreshMode, perms: FreshPerms): Promise<CmdResult> => invoke('perm:fresh', serial, pkg, mode, perms),
     openSettings: (serial: string, pkg: string): Promise<CmdResult> => invoke('perm:settings', serial, pkg)
   },
   figma: {

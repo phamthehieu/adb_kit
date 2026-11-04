@@ -32,7 +32,8 @@ npm run dist       # đóng gói installer Windows (electron-builder)
   - Theo dõi trực tiếp request HTTP (fetch/XHR…): status, thời gian, nội dung gửi/nhận.
   - Với **app Tauri**: hiện cả các **lệnh JS → Rust** (`plugin:sql|select` kèm câu SQL, lệnh riêng của app…) và giải mã request của plugin HTTP chạy bên Rust. Để làm được, ADB Kit chèn một đoạn móc trong bộ nhớ vào `window.ipc`; đoạn này mất khi app khởi động lại.
   - "Tải lại app" để bắt cả những gì app gọi lúc khởi động. "Tạo bước kiểm tra" để thêm bước "Kiểm tra API" vào kịch bản.
-- **Quyền:** xem quyền runtime (có công tắc cấp/thu hồi), quyền đặc biệt (chọn chế độ appops), quyền tự cấp khi cài, và **lần dùng gần nhất**. Có nút "Thu hồi tất cả" và "Cài đặt app". Lưu ý: thu hồi quyền runtime thì Android sẽ tắt app.
+- **Quyền:** xem quyền runtime (có công tắc cấp/thu hồi), quyền đặc biệt (chọn chế độ appops), quyền tự cấp khi cài, và **lần dùng gần nhất**. Có nút "Cấp hết", "Làm sạch app" (xóa dữ liệu như mới cài, cấp lại quyền đang có), "Thu hồi tất cả" và "Cài đặt app". Lưu ý: thu hồi quyền runtime thì Android sẽ tắt app.
+- **Trạng thái app trước khi chạy (mọi app, không riêng app nào):** ở tab Kịch bản và Bộ test chọn *Giữ nguyên / Tắt hẳn app / Xóa dữ liệu (như mới cài)* và *Giữ quyền / Cấp hết / Thu hồi hết*. Áp dụng cho "App cần test" của từng kịch bản ở đầu mỗi lượt (bộ test: trước mỗi testcase và mỗi lần chạy lại; chạy nhiều máy cũng vậy), nên mỗi lần chạy xuất phát từ cùng một trạng thái mà không cần máy ảo. Chọn xóa dữ liệu hoặc thu hồi quyền sẽ **hỏi xác nhận** trước khi chạy. ADB Kit từ chối xóa dữ liệu của thành phần hệ thống (`android`, SystemUI, Settings, Phone, Google Play services…). Quyền bị hệ thống khóa hoặc không cấp được qua `pm grant` (tùy bản Android) được báo trong nhật ký chứ không làm hỏng lần chạy.
 - **Automation (cho tester):**
   - **Record:** thao tác trên màn hình mirror (chạm, giữ, vuốt, cuộn, gõ phím, Back/Home...) được ghi thành các bước. Khoảng nghỉ giữa các thao tác thành bước `Wait`; các ký tự gõ liên tiếp được gộp thành một bước. Tọa độ được lưu theo tỷ lệ 0..1 nên chạy được trên máy có độ phân giải khác. Khi có thể, mỗi lần chạm còn ghi lại phần tử bên dưới (id/text) để lúc phát lại tìm đúng phần tử ("Smart targets").
   - **Inspect:** bấm vào một phần tử trên màn hình để xem class/id/text, rồi thêm bước Tap / Wait for / Assert visible / Assert gone.
@@ -72,11 +73,11 @@ npm run dist       # đóng gói installer Windows (electron-builder)
 - **Chạy từ dòng lệnh** (CI, chạy hằng đêm) — không mở cửa sổ:
 
   ```bat
-  "ADB Kit.exe" --run "D:\tests\BoTest_MyEnglish.json" [--serial <máy>] [--out <thư mục>] [--no-video]
+  "ADB Kit.exe" --run "D:\tests\BoTest_MyEnglish.json" [--serial <máy>] [--out <thư mục>] [--no-video] [--fresh off|stop|clear] [--perms keep|all|none]
   rem bản dev:  npm run build && npm run cli -- "D:\tests\kich_ban.json"
   ```
 
-  Nhận cả kịch bản lẫn bộ test. In tiến trình ra terminal, ghi `ket-qua.json`, **mã thoát** 0 = đạt, 1 = có lỗi, 2 = không chạy được. Bộ test vẫn xuất file KBKT như khi chạy trong app.
+  `--fresh` / `--perms` ghi đè lựa chọn "Trước khi chạy" / "Quyền" trong file (ví dụ CI luôn chạy với `--fresh clear --perms all`). Nhận cả kịch bản lẫn bộ test. In tiến trình ra terminal, ghi `ket-qua.json`, **mã thoát** 0 = đạt, 1 = có lỗi, 2 = không chạy được. Bộ test vẫn xuất file KBKT như khi chạy trong app.
 
 ## Đợt 3: vùng bỏ qua, hiệu năng, KBKT
 
@@ -111,6 +112,7 @@ Tab **So với Figma**: so một phần tử trên máy thật với node tươn
 3. Chọn frame trong danh sách (nhóm theo section, có ô lọc), hoặc bấm **Tìm màn giống**: app đọc chữ trên màn hình điện thoại và gợi ý các frame có nhiều chữ trùng nhất.
 4. Bật **Theo dõi** rồi bấm vào phần tử trên màn mirror. Lúc này cú bấm **không** đi vào app mà chỉ dùng để đo; muốn thao tác thật thì giữ **Alt** khi bấm. Cuộn chuột, phím và các nút Back/Home vẫn gửi vào máy như thường. App tự tìm node Figma tương ứng, trước hết theo chữ, sau đó theo chữ bên trong, cuối cùng theo vị trí so với chữ gần nhất. Nếu tìm sai, bấm thẳng lên ảnh Figma để chọn tay. Khi màn hình điện thoại đổi (do Alt + bấm, cuộn, hoặc app tự chuyển màn), frame Figma tự đổi theo.
    - Kéo thanh dọc giữa điện thoại và panel, hoặc giữa ảnh Figma và bảng số đo, để đổi độ rộng. Bấm đúp vào thanh để về mặc định.
+   - Các khung xếp chồng (Mạng/API: danh sách ↔ chi tiết; Tự động test: các bước ↔ nhật ký; Dữ liệu và Tài liệu YC: danh sách ↔ nội dung) có thanh kéo riêng, đổi chiều cao hoặc độ rộng tùy panel đang rộng hay hẹp. Hai nút mũi tên giữa thanh ẩn khung này để khung kia chiếm hết chỗ, bấm lại để mở. Kích thước và trạng thái ẩn/hiện được nhớ cho lần sau.
 5. Bảng so sánh: rộng/cao, lề trong phần tử cha, khoảng cách tới phần tử trên/dưới/trái/phải, khoảng cách tới mép màn hình. Ô nào lệch quá **sai số** (mặc định 2dp) thì tô đỏ. Phần tử cha và phần tử kế bên cũng được ghép cặp sang Figma, nên hai bên luôn đo tới cùng một phần tử. Có kèm thông số thiết kế: cỡ chữ, màu, bo góc, auto layout (gap/padding), cách co giãn.
 
 Lưu ý:
@@ -323,6 +325,8 @@ Sau khi tạo báo cáo lỗi (F8), bấm **Tạo ticket Jira**: ADB Kit tạo t
 | `src/shared/reqdoc.ts` | mô hình tài liệu, quy tắc trường, giá trị biên, sinh testcase, so màn hình với tài liệu |
 | `src/shared/reqapi.ts` | đối chiếu API thật với tài liệu, kịch bản giả lập nhánh lỗi |
 | `src/renderer/src/components/ReqPanel.tsx`, `ReqApiLive.tsx` | tab Tài liệu YC, phần API trên máy |
+| `src/main/freshapp.ts` | đưa app bất kỳ về trạng thái xác định trước khi test: tắt hẳn / xóa dữ liệu, rồi giữ / cấp hết / thu hồi hết quyền (dùng bởi Runner, bộ test, CLI và các nút trong tab Quyền) |
+| `src/renderer/src/components/FreshOptions.tsx`, `PaneHandle.tsx` | ô chọn "Trước khi chạy / Quyền"; thanh kéo kèm nút ẩn/hiện giữa hai khung |
 | `src/preload/index.ts` | API `window.api` cho renderer |
 | `src/renderer/src/lib/control.ts` | đóng gói nhị phân các lệnh điều khiển của scrcpy |
 | `src/renderer/src/lib/player.ts` | giải mã H.264 và vẽ lên canvas |

@@ -3,16 +3,25 @@ import { join, resolve } from 'node:path'
 import { listDevices } from './adb'
 import { Runner } from './runner'
 import { SuiteRunner, readScript, readSuite } from './suite'
-import { DEFAULT_RUN_OPTIONS, describeStep, type RunEvent, type RunOptions, type SuiteEvent } from '../shared/automation'
+import { DEFAULT_RUN_OPTIONS, describeStep, type FreshMode, type FreshPerms, type RunEvent, type RunOptions, type SuiteEvent } from '../shared/automation'
 
 export interface CliArgs {
   file: string
   serial?: string
   out?: string
   video: boolean
+  /** App state before every case / run (overrides the file): off | stop | clear. */
+  fresh?: FreshMode
+  /** Runtime permissions at that moment: keep | all | none. */
+  perms?: FreshPerms
+  /** A bad value for --fresh / --perms (reported when the run starts). */
+  bad?: string
 }
 
-/** `--run <file> [--serial X] [--out dir] [--no-video]` → parsed args, or null when not a CLI run. */
+const FRESH_VALUES: FreshMode[] = ['off', 'stop', 'clear']
+const PERMS_VALUES: FreshPerms[] = ['keep', 'all', 'none']
+
+/** `--run <file> [--serial X] [--out dir] [--no-video] [--fresh off|stop|clear] [--perms keep|all|none]` → parsed args, or null when not a CLI run. */
 export function parseCli(argv: string[]): CliArgs | null {
   const i = argv.indexOf('--run')
   if (i < 0) return null
@@ -20,7 +29,23 @@ export function parseCli(argv: string[]): CliArgs | null {
     const j = argv.indexOf(k)
     return j >= 0 ? argv[j + 1] : undefined
   }
-  return { file: argv[i + 1] ?? '', serial: val('--serial'), out: val('--out'), video: !argv.includes('--no-video') }
+  const fresh = val('--fresh')
+  const perms = val('--perms')
+  const bad =
+    fresh !== undefined && !FRESH_VALUES.includes(fresh as FreshMode)
+      ? `--fresh phải là ${FRESH_VALUES.join(' | ')} (nhận "${fresh}")`
+      : perms !== undefined && !PERMS_VALUES.includes(perms as FreshPerms)
+        ? `--perms phải là ${PERMS_VALUES.join(' | ')} (nhận "${perms}")`
+        : undefined
+  return {
+    file: argv[i + 1] ?? '',
+    serial: val('--serial'),
+    out: val('--out'),
+    video: !argv.includes('--no-video'),
+    fresh: fresh as FreshMode | undefined,
+    perms: perms as FreshPerms | undefined,
+    bad
+  }
 }
 
 const out = (s: string): void => {
@@ -35,6 +60,7 @@ const out = (s: string): void => {
 export async function runCli(a: CliArgs, reportsRoot: string, templatePath: string): Promise<number> {
   try {
     if (!a.file) throw new Error('thiếu đường dẫn: --run <kịch bản hoặc bộ test .json>')
+    if (a.bad) throw new Error(a.bad)
     const file = resolve(a.file)
     const raw = JSON.parse(readFileSync(file, 'utf8')) as { kind?: string }
     const devices = (await listDevices()).filter((d) => d.state === 'device')
@@ -42,11 +68,13 @@ export async function runCli(a: CliArgs, reportsRoot: string, templatePath: stri
     if (!serial) throw new Error('không có thiết bị nào sẵn sàng (adb devices)')
     if (a.serial && !devices.some((d) => d.serial === a.serial)) throw new Error(`thiết bị ${a.serial} không sẵn sàng`)
     const root = a.out ? resolve(a.out) : reportsRoot
-    const opts: RunOptions = { ...DEFAULT_RUN_OPTIONS, recordVideo: a.video }
+    const opts: RunOptions = { ...DEFAULT_RUN_OPTIONS, recordVideo: a.video, fresh: a.fresh, freshPerms: a.perms }
     out(`ADB Kit — chạy ${file} trên ${serial}`)
 
     if (raw.kind === 'adbkit-suite') {
       const suite = readSuite(file)
+      if (a.fresh) suite.fresh = a.fresh // the command line wins over the file
+      if (a.perms) suite.freshPerms = a.perms
       let titles: string[] = []
       let end: Extract<SuiteEvent, { kind: 'end' }> | null = null
       const s = new SuiteRunner(serial, suite, opts, () => null, (e) => {

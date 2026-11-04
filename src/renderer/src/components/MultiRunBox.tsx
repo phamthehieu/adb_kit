@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, Play, Smartphone, Square, X } from 'lucide-react'
-import type { DeviceRun, RunOptions, Suite } from '@shared/automation'
+import { freshRisk, type DeviceRun, type RunOptions, type Suite } from '@shared/automation'
 import type { DeviceInfo } from '@shared/types'
 import { autoStore } from '../lib/automation'
 
@@ -40,6 +40,8 @@ export function MultiRunBox({ suite, opts, canRun, busy, onClose }: { suite: Sui
     })
 
   const run = async (): Promise<void> => {
+    const freshWarn = freshRisk(suite.fresh, suite.freshPerms)
+    if (freshWarn && !confirm(`Trên ${picked.size} điện thoại, mỗi testcase sẽ ${freshWarn}.\n\nVẫn chạy?`)) return
     setErr('')
     setHtml('')
     setProgress([])

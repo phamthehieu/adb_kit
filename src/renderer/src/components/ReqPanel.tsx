@@ -18,6 +18,7 @@ import {
 import { setClipboard } from '../lib/control'
 import { conformIssues } from '@shared/reqapi'
 import { ApiLive, CaptureBar, reportFor, useCapture, type Capture } from './ReqApiLive'
+import { PaneHandle } from './PaneHandle'
 
 /**
  * BA requirement documents (TLNV / MTYCTD .docx): what each screen / API must do, test cases
@@ -110,6 +111,7 @@ function ScreensTab({ doc, serial }: { doc: ReqDoc; serial: string }) {
           )
         })}
       </div>
+      <PaneHandle id="rq-list" target="prev" />
       <div className="rq-detail">
         <div className="rq-crumb muted">{s.path.filter(Boolean).slice(0, -1).join(' › ')}</div>
         <h3 className="rq-h">{s.title}</h3>
@@ -235,6 +237,7 @@ function ApisTab({ doc, cap }: { doc: ReqDoc; cap: Capture }) {
           )
         })}
       </div>
+      <PaneHandle id="rq-list" target="prev" />
       <div className="rq-detail">
         <div className="rq-crumb muted">{[a.system, a.screen].filter(Boolean).join(' › ')}</div>
         <h3 className="rq-h">{a.name}</h3>

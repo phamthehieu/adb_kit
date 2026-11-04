@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ExternalLink, ListPlus, Loader2, RefreshCw, ShieldOff } from 'lucide-react'
-import { emptyScript, shortPerm, type PermissionInfo, type Script, type Step } from '@shared/automation'
+import { Eraser, ExternalLink, ListPlus, Loader2, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react'
+import { emptyScript, shortPerm, type FreshMode, type FreshPerms, type PermissionInfo, type Script, type Step } from '@shared/automation'
 import { PackagePicker } from './PackagePicker'
 
 const KIND_TITLE: Record<PermissionInfo['kind'], { title: string; note: string }> = {
@@ -56,6 +56,19 @@ export function PermissionsPanel({ serial }: { serial: string }) {
     }
   }
 
+  /** Same routine the test runs use before a run (works for any app). */
+  const fresh = async (key: string, mode: FreshMode, perm: FreshPerms, ask?: string): Promise<void> => {
+    if (ask && !confirm(ask)) return
+    setBusy(key)
+    try {
+      const r = await window.api.perms.fresh(serial, pkg, mode, perm)
+      setMsg({ text: r.output.split('\n').join(' · ') || 'Xong', error: !r.ok })
+      await load()
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const toggle = async (p: PermissionInfo): Promise<void> => {
     if (p.granted && !confirm(`Thu hồi quyền ${shortPerm(p.name)} của ${pkg}?\nAndroid sẽ tắt app ngay lập tức.`)) return
     return act(p.name, () => window.api.perms.set(serial, pkg, p.name, !p.granted), `${p.granted ? 'Đã thu hồi' : 'Đã cấp'} ${shortPerm(p.name)}${p.granted ? ' — Android đã tắt app' : ''}`)
@@ -78,6 +91,29 @@ export function PermissionsPanel({ serial }: { serial: string }) {
         <PackagePicker serial={serial} value={pkg} onChange={setPkg} placeholder="Chọn app…" style={{ width: 260 }} />
         <button className="iconbtn" disabled={!pkg} onClick={() => void load()} title="Đọc lại"><RefreshCw size={13} /></button>
         <span className="spacer" style={{ flex: 1 }} />
+        <button
+          className="iconbtn"
+          disabled={!pkg || !!busy}
+          onClick={() => void fresh('grant-all', 'off', 'all')}
+          title="Cấp mọi quyền runtime còn thiếu (camera, vị trí, thông báo…) để hộp thoại hệ thống không chen vào lúc test"
+        >
+          <ShieldCheck size={13} /> Cấp hết
+        </button>
+        <button
+          className="iconbtn danger"
+          disabled={!pkg || !!busy}
+          onClick={() =>
+            void fresh(
+              'fresh',
+              'clear',
+              'keep',
+              `Xóa TOÀN BỘ dữ liệu của ${pkg} (đăng nhập, cài đặt, cache…) và tắt app?\nCác quyền đang cấp sẽ được cấp lại.`
+            )
+          }
+          title="Xóa dữ liệu app như vừa cài mới, giữ nguyên các quyền đang cấp (pm clear)"
+        >
+          <Eraser size={13} /> Làm sạch app
+        </button>
         <button
           className="iconbtn danger"
           disabled={!pkg || !!busy}

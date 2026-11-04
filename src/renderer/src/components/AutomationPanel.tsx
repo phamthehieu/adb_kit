@@ -23,6 +23,7 @@ import {
   PERF_UNIT,
   describeStep,
   destructiveSteps,
+  freshRisk,
   emptyScript,
   expectedOf,
   nodeAt,
@@ -42,6 +43,8 @@ import { autoStore, onInspect, onMasksDone, onRecord, useAutoState } from '../li
 import { PackagePicker } from './PackagePicker'
 import { SuitePanel } from './SuitePanel'
 import { ExplorePanel } from './ExplorePanel'
+import { PaneHandle } from './PaneHandle'
+import { FreshOptions } from './FreshOptions'
 
 type StepState = { state: 'running' | 'ok' | 'failed' | 'warn'; message?: string }
 type LogLine = { level: 'info' | 'warn' | 'error' | 'ok'; message: string; at: string }
@@ -414,6 +417,8 @@ export function AutomationPanel({ serial }: { serial: string }) {
   const run = async (): Promise<void> => {
     if (!script.steps.length) return
     const risky = destructiveSteps(script)
+    const freshWarn = script.app ? freshRisk(opts.fresh, opts.freshPerms) : null
+    if (freshWarn) risky.unshift(`Trước khi chạy: ${freshWarn} (${script.app})`)
     if (risky.length && !confirm(`Kịch bản có ${risky.length} bước sẽ THAY ĐỔI dữ liệu / thiết lập trên điện thoại:\n\n${risky.join('\n')}\n\nVẫn chạy?`)) return
     autoStore.set({ recording: false, inspecting: false, highlight: null, running: true, unlocked: false })
     setRunning(true)
@@ -923,6 +928,15 @@ export function AutomationPanel({ serial }: { serial: string }) {
         {check('measurePerf', 'Đo hiệu năng', 'Đo thời gian mở app, RAM / CPU (mỗi 2 giây) và tỉ lệ khung hình giật; hiện biểu đồ trong báo cáo')}
         {check('updateBaselines', 'Cập nhật ảnh chuẩn', 'Bước "So sánh màn hình" sẽ LƯU màn hình hiện tại làm ảnh chuẩn mới thay vì so sánh (dùng khi giao diện thay đổi có chủ đích)')}
         {opts.webErrors && check('failOnWebErrors', 'Lỗi JS = test lỗi', 'Đánh dấu lần chạy là LỖI nếu có lỗi JavaScript')}
+      </div>
+      <div className="auto-row opts">
+        <FreshOptions
+          fresh={opts.fresh ?? 'off'}
+          perms={opts.freshPerms ?? 'keep'}
+          app={script.app}
+          disabled={running}
+          onChange={(fresh, freshPerms) => setOpts({ ...opts, fresh, freshPerms })}
+        />
         <span className="spacer" />
         <select
           className="input sm"
@@ -1023,6 +1037,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
         </div>
       )}
 
+      <PaneHandle id="auto-log" />
       <div className="auto-log">
         {log.map((l, i) => (
           <div key={i} className={`ll ${l.level}`}>

@@ -62,6 +62,7 @@ export const TOPICS: HelpTopic[] = [
       ['+', 'Kết nối máy qua Wi-Fi (nhập ip:cổng) hoặc ghép đôi Gỡ lỗi không dây (Android 11+).'],
       ['⚙ (góc phải)', 'Chất lượng mirror: độ phân giải tối đa, bitrate, FPS. Máy tính yếu hoặc mạng Wi-Fi chậm → chọn 1024 / 4 Mbps / 30.'],
       ['Thanh công cụ', 'Mỗi nút mở một bảng bên cạnh màn hình điện thoại; bấm lại để đóng. Kéo thanh dọc giữa điện thoại và bảng để đổi độ rộng, bấm đúp để về mặc định.'],
+      ['Thanh kéo giữa hai khung', 'Các khung xếp chồng (danh sách ↔ chi tiết, các bước ↔ nhật ký…) kéo được để đổi chiều cao / độ rộng. Hai nút mũi tên ở giữa thanh ẩn khung này để khung kia chiếm hết chỗ; bấm lại để mở. Bấm đúp thanh để về mặc định. Kích thước được nhớ.'],
       ['Dòng chữ dưới cùng', 'Thông báo kết quả gần nhất (ví dụ đường dẫn ảnh vừa chụp — bấm để mở thư mục).']
     ],
     faq: [
@@ -304,7 +305,9 @@ export const TOPICS: HelpTopic[] = [
       'Nhóm "Quyền tự cấp khi cài đặt": chỉ xem, không đổi được.'
     ],
     buttons: [
-      ['Thu hồi tất cả', 'Thu hồi mọi quyền runtime — app như mới cài, lần mở sau sẽ xin quyền lại. Android sẽ tắt app.'],
+      ['Cấp hết', 'Cấp mọi quyền runtime còn thiếu (camera, vị trí, thông báo…) để hộp thoại hệ thống không chen vào lúc test. Quyền do hệ thống khóa thì bỏ qua và được báo lại.'],
+      ['Làm sạch app', 'Xóa toàn bộ dữ liệu app (đăng nhập, cài đặt, cache — như vừa cài mới), tắt app, rồi cấp lại các quyền đang cấp. Có hỏi xác nhận. Dùng được cho app bất kỳ; từ chối với app hệ thống quan trọng (Cài đặt, SystemUI, Google Play services…).'],
+      ['Thu hồi tất cả', 'Thu hồi mọi quyền runtime — lần mở sau app sẽ xin quyền lại. Android sẽ tắt app.'],
       ['Cài đặt app', 'Mở trang Thông tin ứng dụng trên điện thoại.'],
       ['Thêm vào kịch bản (biểu tượng danh sách)', 'Thêm bước kiểm tra trạng thái quyền này vào kịch bản tự động.']
     ],
@@ -398,7 +401,9 @@ export const TOPICS: HelpTopic[] = [
       ['Quay video', 'Quay màn hình suốt lần chạy, đính kèm vào báo cáo.'],
       ['Bắt lỗi WebView, Ghi API', 'Ghi lỗi JS và mọi request vào báo cáo (cần cho bước Kiểm tra API).'],
       ['Đo hiệu năng', 'Thời gian mở app, RAM / CPU mỗi 2 giây, tỉ lệ khung hình giật — có biểu đồ trong báo cáo.'],
-      ['Cập nhật ảnh chuẩn', 'Bước "So sánh màn hình" lưu ảnh mới làm chuẩn (khi giao diện đổi có chủ đích).']
+      ['Cập nhật ảnh chuẩn', 'Bước "So sánh màn hình" lưu ảnh mới làm chuẩn (khi giao diện đổi có chủ đích).'],
+      ['Trước khi chạy', 'Đưa "App cần test" về cùng một trạng thái ở đầu mỗi lượt: Giữ nguyên / Tắt hẳn app / Xóa dữ liệu (như mới cài — mất đăng nhập, có hỏi xác nhận trước khi chạy). Áp dụng cho app nào cũng được.'],
+      ['Quyền (trước khi chạy)', 'Giữ như hiện tại / Cấp hết (hộp thoại xin quyền không chen vào luồng) / Thu hồi hết (để test đúng lúc app xin quyền).']
     ],
     example: {
       title: 'Kịch bản đăng nhập',
@@ -467,11 +472,11 @@ export const TOPICS: HelpTopic[] = [
     buttons: [
       ['Chạy lại khi lỗi', 'Testcase lỗi chạy lại 1–2 lần; kết quả vào cột KQ lần 2 / lần 3.'],
       ['Mẫu KBKT', 'BES, BCCS, hoặc file mẫu riêng cho file xuất ra.'],
-      ['Tắt hẳn app trước mỗi testcase', 'Testcase không phụ thuộc màn hình testcase trước để lại.'],
+      ['Trước khi chạy / Quyền', 'Áp dụng trước MỖI testcase (và mỗi lần chạy lại): Tắt hẳn app (mặc định), Xóa dữ liệu để như mới cài, và cấp hết / thu hồi hết quyền. Mỗi kịch bản dùng "App cần test" của chính nó nên bộ test nhiều app vẫn đúng. Cũng áp dụng khi chạy trên nhiều máy.'],
       ['Ghi kết quả test tay', 'Ghi ngay kết quả test tay vào bản sao file KBKT mà không chạy gì.'],
       ['Nhập lại', 'Đọc lại file KBKT, giữ các liên kết / kết quả đã đánh.']
     ],
-    tips: ['Chạy hằng đêm không cần mở cửa sổ: "ADB Kit.exe" --run "đường-dẫn\\bo-test.json" [--serial máy] [--out thư-mục]. Mã thoát 0 = đạt, 1 = có lỗi.'],
+    tips: ['Chạy hằng đêm không cần mở cửa sổ: "ADB Kit.exe" --run "đường-dẫn\\bo-test.json" [--serial máy] [--out thư-mục] [--fresh off|stop|clear] [--perms keep|all|none]. Mã thoát 0 = đạt, 1 = có lỗi, 2 = không chạy được.'],
     tour: [
       { target: { text: 'Bộ test', within: '.auto .seg' }, panel: 'auto', title: 'Bộ test', body: 'Bấm để chuyển sang Bộ test (gom nhiều kịch bản, xuất KBKT).' }
     ]

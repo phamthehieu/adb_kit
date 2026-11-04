@@ -22,7 +22,8 @@ import {
 } from 'lucide-react'
 import { autoStore } from '../lib/automation'
 import { MultiRunBox } from './MultiRunBox'
-import { destructiveSteps, emptySuite, kbktKey, type KbktImport, type KbktLink, type CaseInfo, type CaseState, type RunOptions, type ScriptInfo, type Suite, type SuiteEvent } from '@shared/automation'
+import { FreshOptions } from './FreshOptions'
+import { destructiveSteps, emptySuite, freshRisk, kbktKey, suiteFresh, type KbktImport, type KbktLink, type CaseInfo, type CaseState, type RunOptions, type ScriptInfo, type Suite, type SuiteEvent } from '@shared/automation'
 
 interface Props {
   serial: string
@@ -296,14 +297,18 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
     // Ask once for every step that changes data / settings across the suite's scripts.
     const risky: string[] = []
     const paths = [...suite.items.filter((i) => i.enabled).map((i) => i.path), ...(suite.kbkt?.rows ?? []).flatMap((r) => (r.script ? [r.script] : []))]
+    const apps = new Set<string>()
     for (const p of [...new Set(paths)]) {
       try {
         const s = await window.api.automation.load(p)
+        if (s.app) apps.add(s.app)
         for (const line of destructiveSteps(s)) risky.push(`${s.name} — ${line}`)
       } catch {
         /* unreadable script: the runner reports it */
       }
     }
+    const freshWarn = apps.size ? freshRisk(suite.fresh, suite.freshPerms) : null
+    if (freshWarn) risky.unshift(`Mỗi testcase: ${freshWarn} (${[...apps].join(', ')})`)
     if (risky.length && !confirm(`Bộ test có ${risky.length} bước sẽ THAY ĐỔI dữ liệu / thiết lập trên điện thoại:\n\n${risky.slice(0, 15).join('\n')}${risky.length > 15 ? '\n…' : ''}\n\nVẫn chạy?`)) return
     autoStore.set({ running: true, unlocked: false, recording: false, inspecting: false, highlight: null })
     setRunning(true)
@@ -406,15 +411,13 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
         </label>
       </div>
       <div className="auto-row opts">
-        <label className="check" title="am force-stop app trước mỗi testcase — testcase không phụ thuộc vào màn hình mà testcase trước để lại">
-          <input
-            type="checkbox"
-            checked={suite.resetApp !== false}
-            disabled={running}
-            onChange={(e) => setSuite((s) => ({ ...s, resetApp: e.target.checked }))}
-          />{' '}
-          Tắt hẳn app trước mỗi testcase
-        </label>
+        <FreshOptions
+          fresh={suiteFresh(suite)}
+          perms={suite.freshPerms ?? 'keep'}
+          app="(theo từng kịch bản)"
+          disabled={running}
+          onChange={(fresh, freshPerms) => setSuite((s) => ({ ...s, fresh, freshPerms, resetApp: undefined }))}
+        />
         <span className="muted">Các tùy chọn quay video, bắt lỗi WebView… lấy theo tab Kịch bản.</span>
       </div>
 

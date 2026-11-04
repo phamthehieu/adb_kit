@@ -1041,3 +1041,26 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 0 4px; border-radius: 
 .rq-probe:disabled { opacity: .45; cursor: default; }
 .rq-probe.on { border-color: var(--warn); background: rgba(242, 184, 75, .15); color: var(--warn); }
 .rq-active { border: 1px solid var(--warn); border-radius: 6px; padding: 8px 10px; background: rgba(242, 184, 75, .06); display: flex; flex-direction: column; gap: 5px; font-size: 12px; align-items: flex-start; }
+
+/* ---------- pane handle (resizes stacked or side-by-side panes) ---------- */
+.pane-handle { flex: none; position: relative; z-index: 4; }
+.pane-handle[data-axis='x'] { width: 7px; margin: 0 -3px; cursor: col-resize; }
+.pane-handle[data-axis='y'] { height: 7px; margin: -3px 0; cursor: row-resize; }
+.pane-handle::after { content: ''; position: absolute; background: transparent; transition: background .12s, box-shadow .12s; }
+.pane-handle[data-axis='x']::after { top: 0; bottom: 0; left: 3px; width: 1px; }
+.pane-handle[data-axis='y']::after { left: 0; right: 0; top: 3px; height: 1px; }
+.pane-handle:hover::after, .pane-handle:active::after { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select: none !important; }
+.net-detail pre { max-height: none; }
+.ph-btns { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 2px; padding: 1px; border-radius: 6px; background: var(--bg-1); border: 1px solid var(--line-2); opacity: .85; transition: opacity .12s; z-index: 1; }
+.pane-handle[data-axis='x'] .ph-btns { flex-direction: column; }
+.pane-handle:hover .ph-btns, .pane-handle.folded .ph-btns { opacity: 1; }
+.ph-btn { display: grid; place-items: center; width: 20px; height: 15px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--fg-dim); cursor: pointer; }
+.pane-handle[data-axis='x'] .ph-btn { width: 14px; height: 18px; }
+.ph-btn:hover { background: var(--accent); color: #000; }
+.pane-handle.folded[data-axis='y'] { height: 9px; margin: 0; }
+.pane-handle.folded[data-axis='x'] { width: 9px; margin: 0; }
+.pane-handle.folded::after { background: var(--line-2); }
+
+/* app-state-before-run selects: show the whole option text */
+.fresh-sel { width: auto; min-width: 170px; max-width: 100%; }

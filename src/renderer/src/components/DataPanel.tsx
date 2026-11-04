@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Database, FileCode2, KeyRound, Link2, Loader2, MessageSquareText, Play, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '@shared/appdata'
+import { PaneHandle } from './PaneHandle'
 import type { OtpHit } from '../../../preload'
 import { setClipboard } from '../lib/control'
 import { PackagePicker } from './PackagePicker'
@@ -227,6 +228,7 @@ function AppDataTab({ serial }: { serial: string }) {
           )
         })}
       </div>
+      <PaneHandle id="dt-files" target="prev" />
       <div className="dt-view">
         {!sel && <div className="steps-empty">Chọn một file trong danh sách. SharedPreferences sửa được (app sẽ được đóng khi lưu); database và MMKV chỉ xem.</div>}
         {sel?.kind === 'prefs' && <PrefsView key={sel.path} serial={serial} pkg={pkg} file={sel} />}

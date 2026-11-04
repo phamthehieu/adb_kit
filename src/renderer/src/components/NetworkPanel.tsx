@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Eraser, ListPlus, Pause, Play, RotateCcw, WifiOff, X } from 'lucide-react'
 import { NET_PROFILES, callFailed, describeMock, emptyScript, type MockRule, type NetCall, type NetProfile, type Script, type Step } from '@shared/automation'
 import { PackagePicker } from './PackagePicker'
+import { PaneHandle } from './PaneHandle'
 
 type Kind = 'all' | 'http' | 'ipc'
 
@@ -342,6 +343,7 @@ export function NetworkPanel({ serial }: { serial: string }) {
             </div>
           ))}
         </div>
+        {selected && <PaneHandle id="net-detail" />}
         {selected && (
           <div className="net-detail">
             <div className="nd-head">

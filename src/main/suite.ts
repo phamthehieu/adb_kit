@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { adb } from './adb'
+import { freshApp } from './freshapp'
 import { Runner } from './runner'
 import { writeBack, writeKbkt, type KbktCase, type KbktResult } from './kbkt'
 import type { ScrcpySession } from './scrcpy'
@@ -9,6 +9,7 @@ import {
   expectedOf,
   parseCsv,
   stepsText,
+  suiteFresh,
   kbktKey,
   type CaseInfo,
   type CaseState,
@@ -179,13 +180,29 @@ export class SuiteRunner {
       const res = results[c.index]
       for (let attempt = 1; attempt <= maxAttempts && !this.stopped; attempt++) {
         this.emit({ kind: 'case', index: c.index, attempt, state: 'running' })
-        // Start every case (and every retry) from a fresh app process.
-        if (this.suite.resetApp !== false && c.script.app) await adb(['-s', this.serial, 'shell', 'am', 'force-stop', c.script.app])
+        // Start every case (and every retry) from the app state the suite asks for.
+        const fresh = suiteFresh(this.suite)
+        const freshPerms = this.suite.freshPerms ?? 'keep'
+        let setupError = ''
+        if (c.script.app && (fresh !== 'off' || freshPerms !== 'keep')) {
+          try {
+            await freshApp(this.serial, c.script.app, fresh, freshPerms)
+          } catch (e) {
+            setupError = `Không đưa ${c.script.app} về trạng thái ban đầu: ${(e as Error).message}`
+          }
+        }
+        if (setupError) {
+          res.attempts.push('F')
+          res.state = 'failed'
+          res.message = setupError
+          this.emit({ kind: 'case', index: c.index, attempt, state: 'failed', message: setupError })
+          break // retrying cannot fix a device that refuses the reset
+        }
         const dirName = `${String(c.index + 1).padStart(2, '0')}_${c.script.name.replace(/[^\w-]+/g, '_').slice(0, 40)}${attempt > 1 ? `_lan${attempt}` : ''}`
         const runner = new Runner(
           this.serial,
           c.script,
-          { ...this.opts, repeat: 1 },
+          { ...this.opts, repeat: 1, fresh: 'off', freshPerms: 'keep' }, // the suite already prepared the app
           this.getSession,
           (event) => this.emit({ kind: 'run', index: c.index, event }),
           this.dir,

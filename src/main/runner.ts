@@ -8,6 +8,7 @@ import { WebViewInspector } from './webview'
 import { ChuckerWatcher } from './chucker'
 import { OtpWatcher } from './otp'
 import { agoText, appOps, getPermissions, revokeAllRuntime, setAppOp, type AppOp } from './permissions'
+import { freshApp } from './freshapp'
 import { compareScreen, type VisualResult } from './visual'
 import { PerfMonitor, frameStats, launchTimed, type FrameStats, type PerfSample, type StartupRecord } from './perf'
 
@@ -341,6 +342,20 @@ export class Runner {
     this.emit({ kind: 'log', level, message })
   }
 
+  /** "Trạng thái app trước khi chạy": the app under test starts every pass from the chosen state. */
+  private async freshStart(): Promise<void> {
+    const app = this.script.app
+    const mode = this.opts.fresh ?? 'off'
+    const perms = this.opts.freshPerms ?? 'keep'
+    if (!app || (mode === 'off' && perms === 'keep')) return
+    try {
+      const r = await freshApp(this.serial, app, mode, perms)
+      for (const n of r.notes) this.log('info', `${app}: ${n}`)
+    } catch (e) {
+      throw new Error(`Không đưa ${app} về trạng thái ban đầu: ${(e as Error).message}`)
+    }
+  }
+
   async run(): Promise<void> {
     mkdirSync(this.dir, { recursive: true })
     const started = new Date()
@@ -427,6 +442,7 @@ export class Runner {
       await sleep(300) // let logcat attach before acting
       for (let it = 0; it < repeat; it++) {
         if (repeat > 1) this.log('info', `Lượt ${it + 1}/${repeat}`)
+        await this.freshStart()
         for (let i = 0; i < steps.length; i++) {
           this.check()
           const step = steps[i]

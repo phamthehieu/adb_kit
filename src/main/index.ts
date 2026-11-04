@@ -16,6 +16,7 @@ import { readKbkt } from './kbkt'
 import { WebViewInspector } from './webview'
 import { ChuckerWatcher } from './chucker'
 import { getPermissions, openAppSettings, revokeAllRuntime, setAppOp, setRuntime } from './permissions'
+import { freshApp } from './freshapp'
 import { frameImage, getToken, listPages, loadPage, setToken } from './figma'
 import { clearMiniAppCache, closeForwards, listMiniApps, listWebViews, measureOpen, openDevTools, openLink } from './miniapp'
 import type { WebPage } from '../shared/miniapp'
@@ -35,7 +36,7 @@ import type { JiraConf } from '../shared/jira'
 import { cutNetwork, getConfig, restoreConfig, setAppLocale, setConfig } from './devconf'
 import { clearAllLocations, clearLocation, gpsActive, moveRoute, searchPlace, setLocation, setupMapRequests } from './gps'
 import type { ConfKey } from '../shared/devconf'
-import { parseCsv, type MockRule, type NetCall, type NetProfile, type RunOptions, type Script, type Suite } from '../shared/automation'
+import { parseCsv, type FreshMode, type FreshPerms, type MockRule, type NetCall, type NetProfile, type RunOptions, type Script, type Suite } from '../shared/automation'
 import {
   LogcatStream,
   ShellSession,
@@ -50,7 +51,7 @@ import {
   push,
   removePath
 } from './services'
-import type { DeviceInfo, InstallFlags, MirrorOptions, MirrorStatus } from '../shared/types'
+import type { CmdResult, DeviceInfo, InstallFlags, MirrorOptions, MirrorStatus } from '../shared/types'
 
 let win: BrowserWindow | null = null
 const send = (channel: string, ...args: unknown[]): void => {
@@ -402,6 +403,14 @@ function registerInspectIpc(): void {
   ipcMain.handle('perm:set', (_e, serial: string, pkg: string, perm: string, grant: boolean) => setRuntime(serial, pkg, perm, grant))
   ipcMain.handle('perm:appop', (_e, serial: string, pkg: string, op: string, mode: string) => setAppOp(serial, pkg, op, mode))
   ipcMain.handle('perm:revoke-all', (_e, serial: string, pkg: string) => revokeAllRuntime(serial, pkg))
+  ipcMain.handle('perm:fresh', async (_e, serial: string, pkg: string, mode: FreshMode, perms: FreshPerms): Promise<CmdResult> => {
+    try {
+      const r = await freshApp(serial, pkg, mode, perms)
+      return { ok: true, output: r.notes.join('\n') }
+    } catch (e) {
+      return { ok: false, output: (e as Error).message }
+    }
+  })
   ipcMain.handle('perm:settings', (_e, serial: string, pkg: string) => openAppSettings(serial, pkg))
 }
 

@@ -126,8 +126,11 @@ export interface Suite {
   tester: string
   /** Re-run failed cases this many times (KQ lần 2 / lần 3). */
   retries: number
-  /** Force-stop the app under test before every case so each starts from a clean state. */
+  /** Older files: true = force-stop the app before every case. Superseded by `fresh`. */
   resetApp?: boolean
+  /** Start every case (and every retry) from this app state. Default: stop (= resetApp). */
+  fresh?: FreshMode
+  freshPerms?: FreshPerms
   items: SuiteItem[]
   /** KBKT template for the generated file: "BES", "BCCS" or a path to a custom template. */
   template?: string
@@ -168,9 +171,13 @@ export const emptySuite = (): Suite => ({
   author: '',
   tester: '',
   retries: 1,
-  resetApp: true,
+  fresh: 'stop',
+  freshPerms: 'keep',
   items: []
 })
+
+/** The app state a suite asks for before each case (reads older files that only had `resetApp`). */
+export const suiteFresh = (s: Pick<Suite, 'fresh' | 'resetApp'>): FreshMode => s.fresh ?? (s.resetApp === false ? 'off' : 'stop')
 
 export interface ScriptInfo {
   path: string
@@ -307,6 +314,14 @@ export function destructiveSteps(s: Script): string[] {
   return out
 }
 
+/** What an "app state before run" choice destroys (asked for confirmation), or null when it only stops / grants. */
+export function freshRisk(fresh: FreshMode | undefined, perms: FreshPerms | undefined): string | null {
+  const parts: string[] = []
+  if (fresh === 'clear') parts.push('XÓA toàn bộ dữ liệu của app (đăng nhập, cài đặt…)')
+  if (perms === 'none') parts.push('THU HỒI hết quyền runtime của app')
+  return parts.length ? `${parts.join(' và ')} trước mỗi lần chạy` : null
+}
+
 /** KBKT "Kết quả mong muốn" when the script does not say it explicitly. */
 export function expectedOf(s: Script): string {
   if (s.expected?.trim()) return s.expected.trim()
@@ -337,7 +352,26 @@ export function stepsText(s: Script): string {
     .join('\n')
 }
 
+/** How to bring the app under test to a known state before a run / test case. */
+export type FreshMode = 'off' | 'stop' | 'clear'
+/** What to do with the app's runtime permissions at that moment. */
+export type FreshPerms = 'keep' | 'all' | 'none'
+
+export const FRESH_LABEL: Record<FreshMode, string> = {
+  off: 'Giữ nguyên app',
+  stop: 'Tắt hẳn app',
+  clear: 'Xóa dữ liệu (như mới cài)'
+}
+export const FRESH_PERMS_LABEL: Record<FreshPerms, string> = {
+  keep: 'Giữ quyền như hiện tại',
+  all: 'Cấp hết quyền',
+  none: 'Thu hồi hết (app tự hỏi)'
+}
+
 export interface RunOptions {
+  /** Applied to the script's "App cần test" at the start of every pass. Default: off. */
+  fresh?: FreshMode
+  freshPerms?: FreshPerms
   repeat: number
   /** Find recorded elements again before tapping (robust, ~2s per tap). */
   smartTargets: boolean
