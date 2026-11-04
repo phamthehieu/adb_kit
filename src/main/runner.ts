@@ -9,6 +9,7 @@ import { ChuckerWatcher } from './chucker'
 import { OtpWatcher } from './otp'
 import { agoText, appOps, getPermissions, revokeAllRuntime, setAppOp, type AppOp } from './permissions'
 import { freshApp } from './freshapp'
+import { stateStore } from './appstate'
 import { compareScreen, type VisualResult } from './visual'
 import { PerfMonitor, frameStats, launchTimed, type FrameStats, type PerfSample, type StartupRecord } from './perf'
 
@@ -772,6 +773,19 @@ export class Runner {
         await adb(['-s', this.serial, 'shell', 'am', 'force-stop', step.pkg])
         await this.wait(300)
         return
+      case 'appState': {
+        const meta = stateStore().find(step.pkg, step.name)
+        if (!meta) throw new StepFailed(`không có trạng thái tên "${step.name}" cho ${step.pkg} trên máy tính này (tab Dữ liệu › Trạng thái app)`)
+        const res = await stateStore()
+          .restore(this.serial, meta.id, { launch: step.launch })
+          .catch((e: Error) => {
+            throw new StepFailed(e.message)
+          })
+        this.log('info', res.message)
+        if (res.versionWarning) this.log('warn', res.versionWarning)
+        await this.wait(1500 * speed)
+        return
+      }
       case 'screenshot': {
         const f = await this.capture(step.label || `luot${it + 1}_buoc${i + 1}`, shots)
         return f ? undefined : 'chụp màn hình thất bại'

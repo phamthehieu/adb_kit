@@ -3,6 +3,7 @@ import { ExternalLink, Loader2, Play, Smartphone, Square, X } from 'lucide-react
 import { freshRisk, type DeviceRun, type RunOptions, type Suite } from '@shared/automation'
 import type { DeviceInfo } from '@shared/types'
 import { autoStore } from '../lib/automation'
+import { ask } from '../lib/dialog'
 
 /** "Chạy trên nhiều máy": pick connected phones, run the suite on all at once, see progress. */
 export function MultiRunBox({ suite, opts, canRun, busy, onClose }: { suite: Suite; opts: RunOptions; canRun: boolean; busy: boolean; onClose: () => void }) {
@@ -41,7 +42,7 @@ export function MultiRunBox({ suite, opts, canRun, busy, onClose }: { suite: Sui
 
   const run = async (): Promise<void> => {
     const freshWarn = freshRisk(suite.fresh, suite.freshPerms)
-    if (freshWarn && !confirm(`Trên ${picked.size} điện thoại, mỗi testcase sẽ ${freshWarn}.\n\nVẫn chạy?`)) return
+    if (freshWarn && !(await ask(`Trên ${picked.size} điện thoại, mỗi testcase sẽ ${freshWarn}.`, { title: 'Chạy trên nhiều máy', danger: true, ok: 'Vẫn chạy' }))) return
     setErr('')
     setHtml('')
     setProgress([])

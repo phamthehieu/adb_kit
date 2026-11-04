@@ -147,17 +147,30 @@ export function MapPicker({ center, zoom = 14, a, b, here, onPick, onView, heigh
     const r = box.current!.getBoundingClientRect()
     onPick(unproject([left + (e.clientX - r.left), top + (e.clientY - r.top)], z))
   }
-  const onWheel = (e: React.WheelEvent): void => {
+  // Always zoom the map with the wheel and never scroll the page behind it. React's onWheel is
+  // passive (preventDefault is ignored), so listen natively; the ref keeps the latest zoom state.
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {})
+  wheelRef.current = (e) => {
     const r = box.current!.getBoundingClientRect()
     zoomAt(z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top)
   }
+  useEffect(() => {
+    const el = box.current!
+    const h = (e: WheelEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      wheelRef.current(e)
+    }
+    el.addEventListener('wheel', h, { passive: false })
+    return () => el.removeEventListener('wheel', h)
+  }, [])
 
   const pa = a ? toScreen(a) : null
   const pb = b ? toScreen(b) : null
   const ph = here ? toScreen(here) : null
 
   return (
-    <div className="map" ref={box} style={{ height }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onWheel={onWheel}>
+    <div className="map" ref={box} style={{ height }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}>
       {tiles.map((t) => (
         <img
           key={t.key}

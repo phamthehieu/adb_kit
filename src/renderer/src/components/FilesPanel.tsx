@@ -14,6 +14,7 @@ import {
   Upload
 } from 'lucide-react'
 import type { FileEntry } from '@shared/types'
+import { ask } from '../lib/dialog'
 
 interface DirState {
   loading: boolean
@@ -93,9 +94,9 @@ export function FilesPanel({ serial }: { serial: string }) {
   const upload = (): Promise<void> => run('Tải lên', () => window.api.files.pickAndPush(serial, targetDir), targetDir)
   const download = (): Promise<void> | undefined =>
     sel?.entry ? run('Tải về', () => window.api.files.pull(serial, sel.path, sel.entry!.type === 'dir')) : undefined
-  const remove = (): void => {
+  const remove = async (): Promise<void> => {
     if (!sel?.entry) return
-    if (!confirm(`Xóa "${sel.path}" trên thiết bị? Không thể hoàn tác.`)) return
+    if (!(await ask(`Xóa "${sel.path}" trên thiết bị?\n\nKhông thể hoàn tác.`, { danger: true, ok: 'Xóa' }))) return
     const dir = parent(sel.path)
     void run('Xóa', () => window.api.files.remove(serial, sel.path), dir).then(() => setSel({ path: dir }))
   }
@@ -180,7 +181,6 @@ export function FilesPanel({ serial }: { serial: string }) {
       onDrop={onDrop}
     >
       <div className="panel-head">
-        <span className="panel-title">Tệp trên thiết bị</span>
         <span style={{ flex: 1 }} />
         <button className="iconbtn" disabled={busy} onClick={upload} title={`Tải lên vào ${targetDir}`}><Upload size={13} /> Tải lên</button>
         <button className="iconbtn" disabled={busy || !sel?.entry} onClick={download}><Download size={13} /> Tải về</button>

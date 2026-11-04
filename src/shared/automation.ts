@@ -38,6 +38,8 @@ export type Step =
   | { type: 'assert'; target: Selector; visible: boolean }
   | { type: 'launch'; pkg: string; clear: boolean }
   | { type: 'stopApp'; pkg: string }
+  /** Put a saved copy of the app's data back (login, settings…) — see Dữ liệu › Trạng thái app. */
+  | { type: 'appState'; pkg: string; name: string; launch: boolean }
   | { type: 'screenshot'; label?: string }
   // Environment preparation
   | { type: 'network'; wifi?: 'on' | 'off'; data?: 'on' | 'off' }
@@ -153,6 +155,10 @@ export interface KbktLink {
   /** Manual result entered by the tester. */
   manual?: '' | 'P' | 'F' | 'PE'
   note?: string
+  /** Summary page (index.html) of the evidence saved when the result was marked. */
+  evidence?: string
+  /** When the manual result was marked (ms). */
+  testedAt?: number
 }
 
 export interface KbktImport {
@@ -305,6 +311,7 @@ export function destructiveSteps(s: Script): string[] {
     const risky =
       (st.type === 'launch' && st.clear) ||
       st.type === 'permRevokeAll' ||
+      st.type === 'appState' || // overwrites the app's data
       (st.type === 'permission' && !st.grant) ||
       st.type === 'appop' ||
       (st.type === 'network' && (st.wifi === 'off' || st.data === 'off')) ||
@@ -572,6 +579,8 @@ export function describeStep(s: Step): string {
       return `Mở app ${s.pkg}${s.clear ? ' (xóa dữ liệu trước)' : ''}`
     case 'stopApp':
       return `Tắt hẳn app ${s.pkg}`
+    case 'appState':
+      return `Khôi phục trạng thái app "${s.name || '…'}" của ${s.pkg || '…'}${s.launch ? ' rồi mở app' : ''}`
     case 'screenshot':
       return `Chụp màn hình${s.label ? ` "${s.label}"` : ''}`
     case 'network': {

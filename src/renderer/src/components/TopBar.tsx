@@ -22,9 +22,11 @@ interface Props {
   onSelect: (serial: string) => void
   options: MirrorOptions
   onOptions: (o: MirrorOptions) => void
+  /** Info and actions about the selected phone (model chip, Wi-Fi switch), shown before the settings button. */
+  extra?: React.ReactNode
 }
 
-export function TopBar({ devices, active, onSelect, options, onOptions }: Props) {
+export function TopBar({ devices, active, onSelect, options, onOptions, extra }: Props) {
   return (
     <div className="topbar">
       <div className="logo">
@@ -36,7 +38,16 @@ export function TopBar({ devices, active, onSelect, options, onOptions }: Props)
           <div
             key={d.serial}
             className={`tab ${d.serial === active ? 'active' : ''}`}
+            role="tab"
+            tabIndex={0}
+            aria-selected={d.serial === active}
             onClick={() => onSelect(d.serial)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect(d.serial)
+              }
+            }}
             title={`${d.model} — ${d.serial} (${d.state})`}
           >
             <span className={`dot ${d.state !== 'device' ? 'warn' : ''}`} />
@@ -48,6 +59,7 @@ export function TopBar({ devices, active, onSelect, options, onOptions }: Props)
         ))}
         <ConnectButton />
       </div>
+      {extra}
       <SettingsButton options={options} onOptions={onOptions} />
     </div>
   )

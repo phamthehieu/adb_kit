@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Eraser, ExternalLink, ListPlus, Loader2, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react'
 import { emptyScript, shortPerm, type FreshMode, type FreshPerms, type PermissionInfo, type Script, type Step } from '@shared/automation'
 import { PackagePicker } from './PackagePicker'
+import { ask } from '../lib/dialog'
+import { permName } from '../lib/permLabels'
 
 const KIND_TITLE: Record<PermissionInfo['kind'], { title: string; note: string }> = {
   runtime: { title: 'Quyền cần người dùng cho phép', note: 'Bật/tắt bằng pm grant / revoke. Thu hồi một quyền sẽ khiến Android tắt app.' },
@@ -57,8 +59,8 @@ export function PermissionsPanel({ serial }: { serial: string }) {
   }
 
   /** Same routine the test runs use before a run (works for any app). */
-  const fresh = async (key: string, mode: FreshMode, perm: FreshPerms, ask?: string): Promise<void> => {
-    if (ask && !confirm(ask)) return
+  const fresh = async (key: string, mode: FreshMode, perm: FreshPerms, question?: string): Promise<void> => {
+    if (question && !(await ask(question, { danger: true, ok: 'Làm sạch app' }))) return
     setBusy(key)
     try {
       const r = await window.api.perms.fresh(serial, pkg, mode, perm)
@@ -70,7 +72,7 @@ export function PermissionsPanel({ serial }: { serial: string }) {
   }
 
   const toggle = async (p: PermissionInfo): Promise<void> => {
-    if (p.granted && !confirm(`Thu hồi quyền ${shortPerm(p.name)} của ${pkg}?\nAndroid sẽ tắt app ngay lập tức.`)) return
+    if (p.granted && !(await ask(`Thu hồi quyền ${shortPerm(p.name)} của ${pkg}?\n\nAndroid sẽ tắt app ngay lập tức.`, { danger: true, ok: 'Thu hồi' }))) return
     return act(p.name, () => window.api.perms.set(serial, pkg, p.name, !p.granted), `${p.granted ? 'Đã thu hồi' : 'Đã cấp'} ${shortPerm(p.name)}${p.granted ? ' — Android đã tắt app' : ''}`)
   }
 
@@ -117,10 +119,10 @@ export function PermissionsPanel({ serial }: { serial: string }) {
         <button
           className="iconbtn danger"
           disabled={!pkg || !!busy}
-          onClick={() =>
-            confirm(`Thu hồi TẤT CẢ quyền runtime của ${pkg}? Android sẽ tắt app.`) &&
-            void act('all', () => window.api.perms.revokeAll(serial, pkg), 'Đã thu hồi tất cả quyền runtime')
-          }
+          onClick={async () => {
+            if (await ask(`Thu hồi TẤT CẢ quyền runtime của ${pkg}?\n\nAndroid sẽ tắt app; lần mở sau app sẽ xin quyền lại.`, { danger: true, ok: 'Thu hồi tất cả' }))
+              void act('all', () => window.api.perms.revokeAll(serial, pkg), 'Đã thu hồi tất cả quyền runtime')
+          }}
           title="Đưa app về trạng thái như mới cài (để test luồng xin quyền)"
         >
           <ShieldOff size={13} /> Thu hồi tất cả
@@ -146,7 +148,16 @@ export function PermissionsPanel({ serial }: { serial: string }) {
                 </div>
                 {list.map((p) => (
                   <div key={p.name} className="perm-row">
-                    <span className="pn" title={p.name}>{shortPerm(p.name)}</span>
+                    <span className="pn" title={p.name}>
+                      {permName(p.name).vi ? (
+                        <>
+                          <span className="pn-vi">{permName(p.name).vi}</span>
+                          <span className="pn-raw">{shortPerm(p.name)}</span>
+                        </>
+                      ) : (
+                        <span className="pn-raw only">{shortPerm(p.name)}</span>
+                      )}
+                    </span>
                     <span className="pu">{p.lastUsed ? `dùng ${p.lastUsed}` : ''}</span>
                     {k === 'runtime' && (
                       <button

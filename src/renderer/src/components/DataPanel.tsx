@@ -5,6 +5,8 @@ import { PaneHandle } from './PaneHandle'
 import type { OtpHit } from '../../../preload'
 import { setClipboard } from '../lib/control'
 import { PackagePicker } from './PackagePicker'
+import { ask } from '../lib/dialog'
+import { AppStateTab } from './AppStatePanel'
 
 /* ------------------------------------------------------------ typing */
 
@@ -41,6 +43,7 @@ function OtpTab({ serial }: { serial: string }) {
   const [msg, setMsg] = useState('')
   const [accounts, setAccounts] = useState<Account[]>(loadAccounts)
   const [form, setForm] = useState<Account>({ label: '', user: '', password: '', note: '' })
+  const [addOpen, setAddOpen] = useState(false)
   const autoRef = useRef(auto)
   autoRef.current = auto
 
@@ -92,15 +95,22 @@ function OtpTab({ serial }: { serial: string }) {
             />{' '}
             Tự điền
           </label>
-          <button className={`iconbtn ${watching ? 'on' : 'primary'}`} onClick={() => setWatching(!watching)}>
-            {watching ? <Loader2 size={12} className="spin" /> : <Play size={12} />} {watching ? 'Đang chờ mã… (bấm để dừng)' : 'Chờ mã OTP'}
+          <button className={`iconbtn ${watching ? 'danger-outline' : 'primary'}`} onClick={() => setWatching(!watching)}>
+            {watching ? <X size={12} /> : <Play size={12} />} {watching ? 'Dừng chờ' : 'Chờ mã OTP'}
           </button>
         </div>
-        {!watching && !hits.length && (
-          <div className="steps-empty">
-            Bấm <b>Chờ mã OTP</b> trước khi bấm "Gửi mã" trong app. Mã mới đến (thông báo đã có từ trước bị bỏ qua) sẽ hiện ở đây — bấm <b>Điền</b> để gõ vào
-            ô đang chọn, hoặc bật <b>Tự điền</b>. Trong kịch bản tự động dùng bước "Chờ mã OTP rồi điền".
+        {watching && (
+          <div className="otp-wait">
+            <Loader2 size={14} className="spin" />
+            <b>Đang chờ mã…</b> <span className="muted">Giờ bấm “Gửi mã” trong app. Mã mới sẽ hiện ngay bên dưới.</span>
           </div>
+        )}
+        {!watching && !hits.length && (
+          <ol className="otp-steps">
+            <li>Bấm <b>Chờ mã OTP</b> trước khi bấm “Gửi mã” trong app.</li>
+            <li>Bấm “Gửi mã” trong app. Mã mới đến sẽ hiện ở đây (thông báo có từ trước bị bỏ qua).</li>
+            <li>Chạm vào ô nhập mã trên điện thoại, rồi bấm <b>Điền</b> — hoặc bật <b>Tự điền</b> để khỏi phải bấm.</li>
+          </ol>
         )}
         {hits.map((h, i) => (
           <div key={`${h.seenAt}-${i}`} className={`otp-row ${i === 0 ? 'new' : ''}`}>
@@ -134,27 +144,55 @@ function OtpTab({ serial }: { serial: string }) {
             {a.password && (
               <button className="iconbtn" onClick={() => void fill(a.password, 'mật khẩu')}>Điền mật khẩu</button>
             )}
-            <button className="iconbtn ghost" title="Xóa" onClick={() => confirm(`Xóa "${a.label || a.user}"?`) && saveAccounts(accounts.filter((_, k) => k !== i))}>
+            <button
+              className="iconbtn ghost"
+              title="Xóa"
+              aria-label="Xóa tài khoản"
+              onClick={async () => {
+                if (await ask(`Xóa tài khoản "${a.label || a.user}"?`, { danger: true, ok: 'Xóa' })) saveAccounts(accounts.filter((_, k) => k !== i))
+              }}
+            >
               <X size={12} />
             </button>
           </div>
         ))}
-        <div className="acc-form">
-          <input className="input" placeholder="Tên gợi nhớ (vd. Thuê bao trả trước)" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
-          <input className="input" placeholder="Số điện thoại / tài khoản" value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })} />
-          <input className="input" type="password" placeholder="Mật khẩu (tùy chọn)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          <input className="input" placeholder="Ghi chú (môi trường, gói cước…)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          <button
-            className="iconbtn"
-            disabled={!form.user.trim()}
-            onClick={() => {
-              saveAccounts([...accounts, { ...form, user: form.user.trim() }])
-              setForm({ label: '', user: '', password: '', note: '' })
-            }}
-          >
-            <Plus size={12} /> Thêm
+        {accounts.length === 0 && <div className="muted dt-note">Chưa có tài khoản nào. Thêm tài khoản test để điền vào app bằng một chạm (chạm vào ô cần nhập trên điện thoại trước).</div>}
+        <div className="acc-add-head">
+          <button className={`iconbtn ${addOpen || accounts.length === 0 ? 'on' : ''}`} onClick={() => setAddOpen(!addOpen)} aria-expanded={addOpen || accounts.length === 0}>
+            <Plus size={12} /> Thêm tài khoản
           </button>
         </div>
+        {(addOpen || accounts.length === 0) && (
+          <div className="acc-form">
+            <label className="sfield">
+              <span>Tên gợi nhớ</span>
+              <input className="input" placeholder="vd. Thuê bao trả trước" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+            </label>
+            <label className="sfield">
+              <span>Số điện thoại / tài khoản *</span>
+              <input className="input" placeholder="0962…" value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })} />
+            </label>
+            <label className="sfield">
+              <span>Mật khẩu (tùy chọn)</span>
+              <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </label>
+            <label className="sfield">
+              <span>Ghi chú</span>
+              <input className="input" placeholder="môi trường, gói cước…" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            </label>
+            <button
+              className="iconbtn primary acc-add"
+              disabled={!form.user.trim()}
+              onClick={() => {
+                saveAccounts([...accounts, { ...form, user: form.user.trim() }])
+                setForm({ label: '', user: '', password: '', note: '' })
+                setAddOpen(false)
+              }}
+            >
+              <Plus size={12} /> Lưu tài khoản
+            </button>
+          </div>
+        )}
         <div className="muted dt-note">Chỉ dùng tài khoản test. Mật khẩu lưu dạng thường trong dữ liệu của ADB Kit trên máy tính này.</div>
       </section>
       {msg && <div className="ck-note">{msg}</div>}
@@ -208,8 +246,24 @@ function AppDataTab({ serial }: { serial: string }) {
             </button>
           </div>
         </div>
-        {err && <div className="steps-empty bad">{err}</div>}
-        {!pkg && <div className="steps-empty">Chọn app (bản debug) để xem dữ liệu riêng của nó.</div>}
+        {err && (
+          <div className="dt-err">
+            <b>Không đọc được dữ liệu của app này</b>
+            <span>{err}</span>
+            {/debug/i.test(err) && (
+              <ul>
+                <li>Android chỉ cho đọc dữ liệu riêng của app <b>build debug</b> (không phải bản tải từ cửa hàng).</li>
+                <li>Hãy xin dev bản debug / staging, hoặc chọn một app khác ở ô phía trên.</li>
+              </ul>
+            )}
+          </div>
+        )}
+        {!pkg && (
+          <ol className="otp-steps">
+            <li>Chọn <b>app bản debug</b> ở ô phía trên.</li>
+            <li>Chọn một file trong danh sách: SharedPreferences sửa được, database và MMKV chỉ xem.</li>
+          </ol>
+        )}
         {(['prefs', 'db', 'mmkv', 'other'] as const).map((k) => {
           const list = shown.filter((f) => f.kind === k)
           if (!list.length) return null
@@ -230,7 +284,13 @@ function AppDataTab({ serial }: { serial: string }) {
       </div>
       <PaneHandle id="dt-files" target="prev" />
       <div className="dt-view">
-        {!sel && <div className="steps-empty">Chọn một file trong danh sách. SharedPreferences sửa được (app sẽ được đóng khi lưu); database và MMKV chỉ xem.</div>}
+        {!sel && (
+          <div className="steps-empty">
+            <b>Chọn một file</b> trong danh sách bên trái.
+            <br />
+            SharedPreferences sửa được (app sẽ được đóng khi lưu); database và MMKV chỉ xem.
+          </div>
+        )}
         {sel?.kind === 'prefs' && <PrefsView key={sel.path} serial={serial} pkg={pkg} file={sel} />}
         {sel?.kind === 'db' && <DbView key={sel.path} serial={serial} pkg={pkg} file={sel} />}
         {sel?.kind === 'mmkv' && <MmkvView key={sel.path} serial={serial} pkg={pkg} file={sel} />}
@@ -263,7 +323,7 @@ function PrefsView({ serial, pkg, file }: { serial: string; pkg: string; file: D
   const dirty = rows !== null && JSON.stringify(rows) !== orig
   const upd = (i: number, p: Partial<PrefEntry>): void => setRows((r) => r!.map((x, k) => (k === i ? { ...x, ...p } : x)))
   const save = async (): Promise<void> => {
-    if (!rows || !confirm(`Lưu ${file.path.split('/').pop()}?\n\nApp ${pkg} sẽ bị đóng để ghi file (app đang chạy sẽ ghi đè lên thay đổi).`)) return
+    if (!rows || !(await ask(`Lưu ${file.path.split('/').pop()}?\n\nApp ${pkg} sẽ bị đóng để ghi file (app đang chạy sẽ ghi đè lên thay đổi).`, { ok: 'Lưu' }))) return
     setSaving(true)
     setErr('')
     try {
@@ -617,7 +677,7 @@ function LinksTab({ serial }: { serial: string }) {
 
 /* ------------------------------------------------------------ panel */
 
-type DataTab = 'otp' | 'app' | 'links'
+type DataTab = 'otp' | 'app' | 'state' | 'links'
 
 export function DataPanel({ serial }: { serial: string }) {
   const [tab, setTab] = useState<DataTab>(() => (localStorage.getItem('dataTab') as DataTab) || 'otp')
@@ -631,10 +691,11 @@ export function DataPanel({ serial }: { serial: string }) {
         <div className="seg">
           <button className={tab === 'otp' ? 'on' : ''} onClick={() => pick('otp')}>OTP &amp; tài khoản test</button>
           <button className={tab === 'app' ? 'on' : ''} onClick={() => pick('app')}>Dữ liệu app</button>
+          <button className={tab === 'state' ? 'on' : ''} onClick={() => pick('state')} title="Lưu và khôi phục đăng nhập / dữ liệu app trong vài giây">Trạng thái app</button>
           <button className={tab === 'links' ? 'on' : ''} onClick={() => pick('links')}>Deep link &amp; màn hình</button>
         </div>
       </div>
-      {tab === 'otp' ? <OtpTab serial={serial} /> : tab === 'app' ? <AppDataTab serial={serial} /> : <LinksTab serial={serial} />}
+      {tab === 'otp' ? <OtpTab serial={serial} /> : tab === 'app' ? <AppDataTab serial={serial} /> : tab === 'state' ? <AppStateTab serial={serial} /> : <LinksTab serial={serial} />}
     </div>
   )
 }

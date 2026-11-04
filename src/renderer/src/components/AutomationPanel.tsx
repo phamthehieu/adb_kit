@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   Circle,
   CircleCheck,
   CircleX,
@@ -13,12 +14,15 @@ import {
   Loader2,
   Play,
   Save,
+  SlidersHorizontal,
   Square,
   Trash2,
   TriangleAlert
 } from 'lucide-react'
 import {
   DEFAULT_RUN_OPTIONS,
+  FRESH_LABEL,
+  FRESH_PERMS_LABEL,
   PERF_LABEL,
   PERF_UNIT,
   describeStep,
@@ -45,6 +49,11 @@ import { SuitePanel } from './SuitePanel'
 import { ExplorePanel } from './ExplorePanel'
 import { PaneHandle } from './PaneHandle'
 import { FreshOptions } from './FreshOptions'
+import { ask, tell } from '../lib/dialog'
+import { StateStepFields } from './AppStatePanel'
+import { ManualTestPanel } from './ManualTestPanel'
+import { AddStepMenu } from './AddStepMenu'
+import { CAT_INFO, stepCat, stepIcon } from '../lib/stepMeta'
 
 type StepState = { state: 'running' | 'ok' | 'failed' | 'warn'; message?: string }
 type LogLine = { level: 'info' | 'warn' | 'error' | 'ok'; message: string; at: string }
@@ -85,6 +94,7 @@ function appendRecorded(steps: Step[], step: Step, gapMs: number): Step[] {
 const ADDABLE: { key: string; label: string; make: (app: string) => Step }[] = [
   { key: 'launch', label: 'Mở app', make: (app) => ({ type: 'launch', pkg: app, clear: false }) },
   { key: 'stopApp', label: 'Tắt hẳn app', make: (app) => ({ type: 'stopApp', pkg: app }) },
+  { key: 'appState', label: 'Khôi phục trạng thái app (đăng nhập sẵn)', make: (app) => ({ type: 'appState', pkg: app, name: '', launch: true }) },
   { key: 'wait', label: 'Chờ (ms)', make: () => ({ type: 'wait', ms: 1000 }) },
   { key: 'waitFor', label: 'Chờ chữ xuất hiện', make: () => ({ type: 'waitFor', target: { text: '' }, timeoutMs: 10_000 }) },
   { key: 'assert', label: 'Kiểm tra chữ có hiển thị', make: () => ({ type: 'assert', target: { text: '' }, visible: true }) },
@@ -149,7 +159,7 @@ const PERMISSIONS = [
   'READ_CALENDAR'
 ].map((p) => `android.permission.${p}`)
 
-const mb = (b: number): string => (b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`)
+const mb = (b: number): string => (!Number.isFinite(b) ? '0 MB' : b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`)
 
 /** Shows how much disk the reports use and deletes old run folders on request. */
 function ReportsCleaner() {
@@ -160,16 +170,18 @@ function ReportsCleaner() {
   useEffect(refresh, [])
   if (!stats) return null
   const clean = async (): Promise<void> => {
-    if (!confirm(`Xóa vĩnh viễn các báo cáo (kèm video, ảnh) cũ hơn ${days} ngày?`)) return
+    if (!(await ask(`Xóa vĩnh viễn các báo cáo (kèm video, ảnh) cũ hơn ${days} ngày?`, { danger: true, ok: 'Xóa báo cáo' }))) return
     const r = await window.api.automation.cleanReports(days)
     setMsg(r.deleted ? `Đã xóa ${r.deleted} báo cáo, giải phóng ${mb(r.freed)}` : 'Không có báo cáo nào cũ hơn mốc này')
     refresh()
   }
   return (
     <span className="reports-cleaner">
-      · {stats.count} báo cáo, {mb(stats.bytes)} ·
-      <a className="muted" onClick={clean}>xóa báo cáo cũ hơn</a>
-      <select className="input sm" value={days} onChange={(e) => setDays(+e.target.value)}>
+      <span className="muted">{stats.count ?? 0} báo cáo · {mb(stats.bytes)}</span>
+      <button className="iconbtn sm-btn" onClick={clean} title="Xóa vĩnh viễn các báo cáo (kèm video, ảnh) cũ hơn số ngày bên cạnh">
+        <Trash2 size={12} /> Dọn báo cáo cũ hơn
+      </button>
+      <select className="input sm" value={days} onChange={(e) => setDays(+e.target.value)} aria-label="Số ngày">
         {[1, 7, 14, 30, 90].map((d) => (
           <option key={d} value={d}>{d} ngày</option>
         ))}
@@ -180,6 +192,15 @@ function ReportsCleaner() {
 }
 
 const RESULT_VI: Record<string, string> = { passed: 'ĐẠT', failed: 'LỖI', crashed: 'CRASH', stopped: 'ĐÃ DỪNG' }
+
+/** One line saying what a run will record and do, so the collapsed options box is still honest. */
+function optSummary(o: RunOptions): string {
+  const rec = [o.recordVideo && 'video', o.webErrors && 'lỗi WebView', o.captureApi !== false && 'API', o.measurePerf !== false && 'hiệu năng'].filter(Boolean)
+  const parts = [rec.length ? `Ghi vào báo cáo: ${rec.join(', ')}` : 'Không ghi thêm gì vào báo cáo']
+  if ((o.fresh ?? 'off') !== 'off') parts.push(`Trước khi chạy: ${FRESH_LABEL[o.fresh!].toLowerCase()}`)
+  if ((o.freshPerms ?? 'keep') !== 'keep') parts.push(`Quyền: ${FRESH_PERMS_LABEL[o.freshPerms!].toLowerCase()}`)
+  return parts.join(' · ')
+}
 
 export function AutomationPanel({ serial }: { serial: string }) {
   const auto = useAutoState()
@@ -197,16 +218,17 @@ export function AutomationPanel({ serial }: { serial: string }) {
   const [picked, setPicked] = useState<UiNode | null>(null)
   const [inspectBusy, setInspectBusy] = useState(false)
   const [selected, setSelected] = useState<number | null>(null)
-  const [tab, setTab] = useState<'script' | 'suite' | 'explore'>(() => {
+  const [tab, setTab] = useState<'script' | 'suite' | 'manual' | 'explore'>(() => {
     const t = localStorage.getItem('autoTab')
-    return t === 'suite' || t === 'explore' ? t : 'script'
+    return t === 'suite' || t === 'explore' || t === 'manual' ? t : 'script'
   })
   const [showInfo, setShowInfo] = useState(false)
+  const [optsOpen, setOptsOpen] = useState(() => localStorage.getItem("autoOptsOpen") === "1")
   useEffect(() => localStorage.setItem('autoTab', tab), [tab])
 
   /** "Sửa" from the suite list: load that script file here. */
   const editFromSuite = async (p: string): Promise<void> => {
-    if (dirty && script.steps.length && !confirm('Kịch bản đang mở có thay đổi chưa lưu. Bỏ qua và mở kịch bản khác?')) return
+    if (dirty && script.steps.length && !(await ask('Kịch bản đang mở có thay đổi chưa lưu.\n\nBỏ qua thay đổi và mở kịch bản khác?', { danger: true, ok: 'Bỏ thay đổi' }))) return
     try {
       const s = await window.api.automation.load(p)
       setScriptState({ ...emptyScript(), ...s })
@@ -419,7 +441,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
     const risky = destructiveSteps(script)
     const freshWarn = script.app ? freshRisk(opts.fresh, opts.freshPerms) : null
     if (freshWarn) risky.unshift(`Trước khi chạy: ${freshWarn} (${script.app})`)
-    if (risky.length && !confirm(`Kịch bản có ${risky.length} bước sẽ THAY ĐỔI dữ liệu / thiết lập trên điện thoại:\n\n${risky.join('\n')}\n\nVẫn chạy?`)) return
+    if (risky.length && !(await ask(`Kịch bản có ${risky.length} bước sẽ THAY ĐỔI dữ liệu / thiết lập trên điện thoại:\n\n${risky.join('\n')}`, { title: 'Chạy kịch bản', danger: true, ok: 'Vẫn chạy' }))) return
     autoStore.set({ recording: false, inspecting: false, highlight: null, running: true, unlocked: false })
     setRunning(true)
     setStates({})
@@ -456,8 +478,8 @@ export function AutomationPanel({ serial }: { serial: string }) {
       pushLog('error', (e as Error).message)
     }
   }
-  const newScript = (): void => {
-    if (script.steps.length && dirty && !confirm('Bỏ kịch bản hiện tại (chưa lưu)?')) return
+  const newScript = async (): Promise<void> => {
+    if (script.steps.length && dirty && !(await ask('Bỏ kịch bản hiện tại?\n\nCác thay đổi chưa lưu sẽ mất.', { danger: true, ok: 'Bỏ và tạo mới' }))) return
     setScript(() => ({ ...emptyScript(), app: script.app }))
     setPath(null)
     localStorage.removeItem('autoPath')
@@ -507,8 +529,8 @@ export function AutomationPanel({ serial }: { serial: string }) {
           onClick={stop}
           onChange={(e) => updateTarget(i, { match: e.target.value as MatchMode })}
         >
-          <option value="exact">đúng y</option>
-          <option value="contains">chứa</option>
+          <option value="exact">giống hệt</option>
+          <option value="contains">có chứa</option>
           <option value="prefix">bắt đầu bằng</option>
         </select>
         {t.id && (
@@ -569,6 +591,8 @@ export function AutomationPanel({ serial }: { serial: string }) {
         )
       case 'stopApp':
         return <PackagePicker serial={serial} className="sm grow" value={s.pkg} placeholder="package" onChange={(p) => updateStep(i, { pkg: p })} />
+      case 'appState':
+        return <StateStepFields serial={serial} pkg={s.pkg} name={s.name} launch={s.launch} onChange={(patch) => updateStep(i, patch)} />
       case 'network': {
         const sel = (k: 'wifi' | 'data', label: string): React.ReactNode => (
           <label className="field-inline" onClick={stop}>
@@ -840,6 +864,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
         <div className="seg">
           <button className={tab === 'script' ? 'on' : ''} onClick={() => setTab('script')}>Kịch bản</button>
           <button className={tab === 'suite' ? 'on' : ''} onClick={() => setTab('suite')}>Bộ test</button>
+          <button className={tab === 'manual' ? 'on' : ''} onClick={() => setTab('manual')} title="Test tay theo file KBKT, tự lưu bằng chứng cho mỗi kết quả">Test tay</button>
           <button className={tab === 'explore' ? 'on' : ''} onClick={() => setTab('explore')}>Tự khám phá</button>
         </div>
         {tab === 'script' && (
@@ -852,15 +877,17 @@ export function AutomationPanel({ serial }: { serial: string }) {
               title={path ?? 'chưa lưu'}
             />
             {dirty && <span className="muted-ic" title="có thay đổi chưa lưu">●</span>}
-            <button className="iconbtn" title="Kịch bản mới" disabled={running} onClick={newScript}><FilePlus2 size={13} /></button>
-            <button className="iconbtn" title="Mở kịch bản (.json)" disabled={running} onClick={open}><FolderOpen size={13} /></button>
-            <button className="iconbtn" title="Lưu (Shift+click: lưu thành file khác)" onClick={(e) => void save(e.shiftKey || !path)}><Save size={13} /></button>
+            <button className="iconbtn" title="Kịch bản mới" disabled={running} onClick={newScript}><FilePlus2 size={14} /> <span className="btn-t">Mới</span></button>
+            <button className="iconbtn" title="Mở kịch bản (.json)" disabled={running} onClick={open}><FolderOpen size={14} /> <span className="btn-t">Mở</span></button>
+            <button className="iconbtn" title="Lưu (Shift+click: lưu thành file khác)" onClick={(e) => void save(e.shiftKey || !path)}><Save size={14} /> <span className="btn-t">Lưu</span></button>
           </>
         )}
       </div>
 
       {tab === 'explore' ? (
         <ExplorePanel serial={serial} />
+      ) : tab === 'manual' ? (
+        <ManualTestPanel serial={serial} />
       ) : tab === 'suite' ? (
         <SuitePanel serial={serial} opts={opts} currentScriptPath={dirty ? null : path} onEditScript={editFromSuite} />
       ) : (
@@ -873,8 +900,8 @@ export function AutomationPanel({ serial }: { serial: string }) {
           onChange={(p) => setScript((s) => ({ ...s, app: p }))}
           style={{ flex: 1 }}
         />
-        <button className={`iconbtn ${showInfo ? 'on' : ''}`} onClick={() => setShowInfo(!showInfo)} title="Mục đích / Kết quả mong muốn — dùng khi xuất file KBKT">
-          KBKT
+        <button className={`iconbtn ${showInfo ? 'on' : ''}`} onClick={() => setShowInfo(!showInfo)} title="Mục đích / Kết quả mong muốn — dùng khi xuất file KBKT" aria-expanded={showInfo}>
+          <FileText size={14} /> <span className="btn-t">Thông tin KBKT</span>
         </button>
       </div>
       {showInfo && (
@@ -907,52 +934,61 @@ export function AutomationPanel({ serial }: { serial: string }) {
           <Crosshair size={13} /> Soi phần tử
         </button>
         <span className="spacer" />
+        <button
+          className={`iconbtn ${optsOpen ? 'on' : ''}`}
+          onClick={() => {
+            localStorage.setItem('autoOptsOpen', optsOpen ? '0' : '1')
+            setOptsOpen(!optsOpen)
+          }}
+          aria-expanded={optsOpen}
+          title="Quay video, bắt lỗi, đo hiệu năng, trạng thái app trước khi chạy…"
+        >
+          <SlidersHorizontal size={14} /> <span>Tùy chọn chạy</span><ChevronDown size={13} className={`chev ${optsOpen ? 'up' : ''}`} />
+        </button>
         <label className="field-inline" title="Chạy cả kịch bản bao nhiêu lượt">
           Lượt
           <input className="input sm num" type="number" min={1} max={9999} value={opts.repeat} onChange={(e) => setOpts({ ...opts, repeat: Math.max(1, +e.target.value || 1) })} />
         </label>
-        <select className="input sm" value={opts.speed} onChange={(e) => setOpts({ ...opts, speed: +e.target.value })} title="Tốc độ các bước chờ đã ghi">
+        <select className="input sm" value={opts.speed} onChange={(e) => setOpts({ ...opts, speed: +e.target.value })} title="Tốc độ các bước chờ đã ghi" aria-label="Tốc độ chạy">
           <option value={2}>chậm ×0.5</option>
           <option value={1}>bình thường</option>
           <option value={0.5}>nhanh ×2</option>
           <option value={0.25}>rất nhanh ×4</option>
         </select>
       </div>
-      <div className="auto-row opts">
-        {check('smartTargets', 'Tìm lại phần tử khi bấm', 'Trước khi bấm, tìm lại phần tử theo chữ/id (chạy đúng dù giao diện xê dịch)')}
-        {check('stopOnCrash', 'Dừng khi crash/ANR')}
-        {check('stopOnFailure', 'Dừng khi kiểm tra lỗi')}
-        {check('recordVideo', 'Quay video', 'Quay màn hình suốt lần chạy và đính kèm vào báo cáo')}
-        {check('webErrors', 'Bắt lỗi WebView', 'Kết nối DevTools của WebView (app build debug) để bắt lỗi JS, console.error, request lỗi')}
-        {check('captureApi', 'Ghi API', 'Ghi lại mọi request HTTP và lệnh Tauri (JS → Rust) vào báo cáo; cần cho bước "Kiểm tra API"')}
-        {check('measurePerf', 'Đo hiệu năng', 'Đo thời gian mở app, RAM / CPU (mỗi 2 giây) và tỉ lệ khung hình giật; hiện biểu đồ trong báo cáo')}
-        {check('updateBaselines', 'Cập nhật ảnh chuẩn', 'Bước "So sánh màn hình" sẽ LƯU màn hình hiện tại làm ảnh chuẩn mới thay vì so sánh (dùng khi giao diện thay đổi có chủ đích)')}
-        {opts.webErrors && check('failOnWebErrors', 'Lỗi JS = test lỗi', 'Đánh dấu lần chạy là LỖI nếu có lỗi JavaScript')}
-      </div>
-      <div className="auto-row opts">
-        <FreshOptions
-          fresh={opts.fresh ?? 'off'}
-          perms={opts.freshPerms ?? 'keep'}
-          app={script.app}
-          disabled={running}
-          onChange={(fresh, freshPerms) => setOpts({ ...opts, fresh, freshPerms })}
-        />
-        <span className="spacer" />
-        <select
-          className="input sm"
-          value=""
-          disabled={!editable}
-          onChange={(e) => {
-            const a = ADDABLE.find((x) => x.key === e.target.value)
-            if (a) insert(a.make(script.app))
-          }}
-        >
-          <option value="">+ Thêm bước…</option>
-          {ADDABLE.map((a) => (
-            <option key={a.key} value={a.key}>{a.label}</option>
-          ))}
-        </select>
-      </div>
+      {!optsOpen && <div className="opt-sum" title="Mở “Tùy chọn chạy” để đổi">{optSummary(opts)}</div>}
+      {optsOpen && (
+        <div className="opt-box">
+          <div className="opt-col">
+            <div className="opt-cap">Khi chạy</div>
+            {check('smartTargets', 'Tìm lại phần tử khi bấm', 'Trước khi bấm, tìm lại phần tử theo chữ/id (chạy đúng dù giao diện xê dịch)')}
+            {check('stopOnCrash', 'Dừng khi crash/ANR')}
+            {check('stopOnFailure', 'Dừng khi kiểm tra lỗi')}
+          </div>
+          <div className="opt-col">
+            <div className="opt-cap">Ghi vào báo cáo</div>
+            {check('recordVideo', 'Quay video', 'Quay màn hình suốt lần chạy và đính kèm vào báo cáo')}
+            {check('webErrors', 'Bắt lỗi WebView', 'Kết nối DevTools của WebView (app build debug) để bắt lỗi JS, console.error, request lỗi')}
+            {opts.webErrors && check('failOnWebErrors', 'Có lỗi JS thì tính là lỗi', 'Đánh dấu lần chạy là LỖI nếu có lỗi JavaScript')}
+            {check('captureApi', 'Ghi API', 'Ghi lại mọi request HTTP và lệnh Tauri (JS → Rust) vào báo cáo; cần cho bước "Kiểm tra API"')}
+            {check('measurePerf', 'Đo hiệu năng', 'Đo thời gian mở app, RAM / CPU (mỗi 2 giây) và tỉ lệ khung hình giật; hiện biểu đồ trong báo cáo')}
+          </div>
+          <div className="opt-col wide">
+            <div className="opt-cap">Trạng thái app trước khi chạy</div>
+            <div className="opt-fresh">
+              <FreshOptions
+                fresh={opts.fresh ?? 'off'}
+                perms={opts.freshPerms ?? 'keep'}
+                app={script.app}
+                disabled={running}
+                onChange={(fresh, freshPerms) => setOpts({ ...opts, fresh, freshPerms })}
+              />
+            </div>
+            <div className="opt-cap">Nâng cao</div>
+            {check('updateBaselines', 'Lưu màn hình hiện tại làm ảnh chuẩn', 'Bước "So sánh màn hình" sẽ LƯU màn hình hiện tại làm ảnh chuẩn mới thay vì so sánh (dùng khi giao diện thay đổi có chủ đích)')}
+          </div>
+        </div>
+      )}
 
       {auto.recording && (
         <div className="auto-meta">
@@ -972,28 +1008,64 @@ export function AutomationPanel({ serial }: { serial: string }) {
         </div>
       )}
 
+      <div className="steps-head">
+        <b>{script.steps.length ? `${script.steps.length} bước` : 'Các bước'}</b>
+        <span className="muted">{editable && script.steps.length ? 'Bấm vào một bước để sửa nội dung' : ''}</span>
+        <span className="spacer" />
+        <AddStepMenu
+          primary={script.steps.length === 0}
+          keys={ADDABLE.map((a) => a.key)}
+          iconOf={(k) => {
+            const a = ADDABLE.find((x) => x.key === k)
+            const Icon = a ? stepIcon(a.make('')) : stepIcon({ type: 'shell', cmd: '' })
+            return <Icon size={14} />
+          }}
+          disabled={!editable}
+          onPick={(k) => {
+            const a = ADDABLE.find((x) => x.key === k)
+            if (a) insert(a.make(script.app))
+          }}
+        />
+      </div>
       <div className="steps" ref={listRef}>
         {script.steps.length === 0 && (
-          <div className="steps-empty">
-            Bấm <b>Ghi thao tác</b> rồi dùng điện thoại bên trái — chạm, vuốt, cuộn, gõ chữ, nút Back/Home sẽ thành các bước.
-            <br />
-            Dùng <b>Soi phần tử</b> để thêm bước “chờ xuất hiện”, “kiểm tra hiển thị”, “nếu thấy thì bấm”, rồi bấm <b>Chạy</b>.
+          <div className="steps-empty start">
+            <div className="start-title">Bắt đầu một kịch bản</div>
+            <div className="start-cards">
+              <button className="start-card" disabled={running} onClick={toggleRecord}>
+                <span className="start-ico rec"><span className="rec-dot" /></span>
+                <b>Ghi thao tác</b>
+                <span>Dùng điện thoại bên trái: mỗi lần chạm, vuốt, gõ chữ, bấm Back/Home thành một bước.</span>
+              </button>
+              <button className="start-card" disabled={running} onClick={toggleInspect}>
+                <span className="start-ico"><Crosshair size={18} /></span>
+                <b>Soi phần tử</b>
+                <span>Bấm lên một nút / chữ trên màn hình để thêm bước “chờ xuất hiện”, “kiểm tra”, “nếu thấy thì bấm”.</span>
+              </button>
+            </div>
+            <div className="start-foot">Hoặc bấm <b>Thêm bước</b> ở trên để tự chọn từng bước. Xong bấm <b>Chạy</b>.</div>
           </div>
         )}
         {script.steps.map((s, i) => {
           const st = states[i]
-          const f = editable ? field(i, s) : null
+          const open = selected === i
+          const f = editable && open ? field(i, s) : null
+          const cat = stepCat(s)
+          const Icon = stepIcon(s)
           return (
             <div
               key={i}
               data-i={i}
-              className={`step ${selected === i ? 'sel' : ''} ${st ? `st-${st.state}` : ''}`}
-              onClick={() => setSelected(selected === i ? null : i)}
+              className={`step ${open ? 'sel' : ''} ${st ? `st-${st.state}` : ''}`}
+              onClick={() => setSelected(open ? null : i)}
             >
               <span className="n">{i + 1}</span>
-              <span className="si">{stateIcon(st)}</span>
+              <span className={`sicon c-${cat}`} title={CAT_INFO[cat].title}><Icon size={14} /></span>
               <div className="body">
-                <div className="d">{describeStep(s)}</div>
+                <div className="d">
+                  {st && <span className="si">{stateIcon(st)}</span>}
+                  {describeStep(s)}
+                </div>
                 {f && <div className="f">{f}</div>}
                 {st?.message && <div className={`m ${st.state}`}>{st.message}</div>}
               </div>
@@ -1062,25 +1134,31 @@ export function AutomationPanel({ serial }: { serial: string }) {
             )}
           </div>
         ))}
-        <div className="ll">
-          <a className="muted" onClick={() => void window.api.automation.openBaselinesDir()}>Ảnh chuẩn…</a>
-          <a className="muted" onClick={() => void window.api.automation.openReportsDir()}>Mở tất cả báo cáo…</a>
-          <a
-            className="muted"
-            title="Chọn 2 thư mục báo cáo của cùng kịch bản (bản cũ, bản mới) — xem bước nào mới lỗi, API / hiệu năng / ảnh thay đổi"
-            onClick={() => void window.api.automation.compareRuns().catch((e: Error) => alert(e.message))}
-          >
-            So sánh 2 lần chạy…
-          </a>
-          <a
-            className="muted"
-            title="Tỉ lệ đạt theo thời gian của từng kịch bản và danh sách test chập chờn (lúc đạt lúc lỗi), 30 ngày gần nhất"
-            onClick={() => void window.api.automation.trends().catch((e: Error) => alert(e.message))}
-          >
-            Xu hướng kết quả…
-          </a>
-          <ReportsCleaner />
-        </div>
+      </div>
+      <div className="rep-bar" role="group" aria-label="Báo cáo">
+        <span className="rep-cap">Báo cáo</span>
+        <button className="iconbtn sm-btn" onClick={() => void window.api.automation.openReportsDir()} title="Mở thư mục chứa mọi báo cáo">
+          <FolderOpen size={13} /> Mở thư mục
+        </button>
+        <button
+          className="iconbtn sm-btn"
+          title="Chọn 2 thư mục báo cáo của cùng kịch bản (bản cũ, bản mới) — xem bước nào mới lỗi, API / hiệu năng / ảnh thay đổi"
+          onClick={() => void window.api.automation.compareRuns().catch((e: Error) => tell(e.message))}
+        >
+          So sánh 2 lần chạy
+        </button>
+        <button
+          className="iconbtn sm-btn"
+          title="Tỉ lệ đạt theo thời gian của từng kịch bản và danh sách test chập chờn (lúc đạt lúc lỗi), 30 ngày gần nhất"
+          onClick={() => void window.api.automation.trends().catch((e: Error) => tell(e.message))}
+        >
+          Xu hướng kết quả
+        </button>
+        <button className="iconbtn sm-btn" onClick={() => void window.api.automation.openBaselinesDir()} title="Thư mục ảnh chuẩn của bước “So sánh màn hình”">
+          Ảnh chuẩn
+        </button>
+        <span className="spacer" />
+        <ReportsCleaner />
       </div>
       </>
       )}

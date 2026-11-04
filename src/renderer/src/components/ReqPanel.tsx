@@ -19,6 +19,7 @@ import { setClipboard } from '../lib/control'
 import { conformIssues } from '@shared/reqapi'
 import { ApiLive, CaptureBar, reportFor, useCapture, type Capture } from './ReqApiLive'
 import { PaneHandle } from './PaneHandle'
+import { ask } from '../lib/dialog'
 
 /**
  * BA requirement documents (TLNV / MTYCTD .docx): what each screen / API must do, test cases
@@ -563,7 +564,7 @@ export function ReqPanel({ serial }: { serial: string }) {
     }
   }
   const remove = async (): Promise<void> => {
-    if (!doc || !confirm(`Xoá tài liệu “${doc.title}” khỏi ADB Kit? (file Word gốc không bị ảnh hưởng)`)) return
+    if (!doc || !(await ask(`Xoá tài liệu “${doc.title}” khỏi ADB Kit?\n\nFile Word gốc không bị ảnh hưởng.`, { danger: true, ok: 'Xoá tài liệu' }))) return
     await window.api.req.remove(doc.id)
     const l = await refresh()
     setDoc(null)

@@ -3,6 +3,7 @@ import { Compass, ExternalLink, Loader2, Play, Square } from 'lucide-react'
 import type { ExploreProgress } from '../../../main/explore'
 import { autoStore } from '../lib/automation'
 import { PackagePicker } from './PackagePicker'
+import { ask } from '../lib/dialog'
 
 /** "Tự khám phá": let ADB Kit walk the app on its own and report screens, crashes, UI issues. */
 export function ExplorePanel({ serial }: { serial: string }) {
@@ -16,7 +17,7 @@ export function ExplorePanel({ serial }: { serial: string }) {
   useEffect(() => window.api.suite.onExplore(setP), [])
 
   const start = async (): Promise<void> => {
-    if (!confirm(`ADB Kit sẽ tự bấm khắp app ${pkg} trong ${minutes} phút (bỏ qua nút đăng xuất, xóa, thanh toán, chuyển tiền, gọi…).\n\nNên dùng tài khoản test và để điện thoại yên trong lúc chạy. Bắt đầu?`)) return
+    if (!(await ask(`ADB Kit sẽ tự bấm khắp app ${pkg} trong ${minutes} phút (bỏ qua nút đăng xuất, xóa, thanh toán, chuyển tiền, gọi…).\n\nNên dùng tài khoản test và để điện thoại yên trong lúc chạy.`, { title: 'Tự khám phá app', ok: 'Bắt đầu' }))) return
     localStorage.setItem('explorePkg', pkg)
     localStorage.setItem('exploreMin', String(minutes))
     localStorage.setItem('exploreAvoid', avoid)

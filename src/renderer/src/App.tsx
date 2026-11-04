@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, Bot, Bug, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
+import { AppWindow, Bot, Bug, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
 import { ScreenView } from './components/ScreenView'
@@ -25,11 +25,32 @@ import { PermissionsPanel } from './components/PermissionsPanel'
 import { InstallPanel, type InstallRecord } from './components/InstallPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Splitter } from './components/Splitter'
+import { PanelFrame } from './components/PanelFrame'
+import { StressPanel } from './components/StressPanel'
+import { Launchpad } from './components/Launchpad'
+import { DialogHost, tell } from './lib/dialog'
+import { withTransition } from './lib/motion'
 
-type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req'
+type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req' | 'stress'
 const LEFT_PANELS: Panel[] = ['files', 'perm']
-const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req']
+const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req', 'stress']
 type Status = { text: string; error?: boolean; path?: string } | null
+
+/** Title bar of each tool panel: name, what it is for, and the guide topic behind "Cách dùng". */
+const FRAMES: Partial<Record<Panel, { icon: React.ReactNode; title: string; desc: string; help: string }>> = {
+  files: { icon: <FolderTree size={16} />, title: 'Tệp trên điện thoại', desc: 'Duyệt, tải lên, tải về, tạo thư mục, xóa', help: 'files' },
+  logcat: { icon: <ScrollText size={16} />, title: 'Logcat', desc: 'Log thời gian thực, lọc theo app, mức log, từ khóa', help: 'logcat' },
+  shell: { icon: <SquareTerminal size={16} />, title: 'Shell', desc: 'Chạy lệnh adb shell ngay trong app', help: 'shell' },
+  net: { icon: <Network size={16} />, title: 'Mạng / API', desc: 'Xem request của app; giả lập lỗi, 500, mạng chậm', help: 'net' },
+  data: { icon: <Database size={16} />, title: 'Dữ liệu', desc: 'OTP và tài khoản test, dữ liệu app, trạng thái đăng nhập đã lưu, deep link', help: 'appdata' },
+  stress: { icon: <Hammer size={16} />, title: 'Độ bền', desc: 'Giết tiến trình, thiếu RAM, Doze, đổi ngôn ngữ / giờ, đầy bộ nhớ — bắt lỗi chỉ có ở máy người dùng', help: 'stress' },
+  perm: { icon: <ShieldCheck size={16} />, title: 'Quyền của app', desc: 'Bật/tắt quyền, cấp hết, đưa app về như mới cài', help: 'perm' },
+  mini: { icon: <AppWindow size={16} />, title: 'Miniapp', desc: 'Soi WebView, mở DevTools, miniapp đã tải, mở link nhanh', help: 'mini' },
+  auto: { icon: <Bot size={16} />, title: 'Tự động test', desc: 'Ghi thao tác thành kịch bản, chạy lại, xuất báo cáo và KBKT', help: 'auto' },
+  req: { icon: <FileText size={16} />, title: 'Tài liệu yêu cầu', desc: 'Đọc tài liệu BA, sinh testcase, soát màn hình theo tài liệu', help: 'req' },
+  check: { icon: <ScanEye size={16} />, title: 'Soát UI', desc: 'Tự tìm lỗi giao diện; đổi chế độ tối, cỡ chữ, kích thước hiển thị', help: 'check' },
+  figma: { icon: <Ruler size={16} />, title: 'So với Figma', desc: 'Đo kích thước, khoảng cách của màn hình thật so với thiết kế', help: 'figma' }
+}
 
 const DEFAULT_OPTS: MirrorOptions = { maxSize: 1280, bitRate: 8_000_000, maxFps: 60 }
 const loadOpts = (): MirrorOptions => {
@@ -172,6 +193,20 @@ export function App() {
       }),
     []
   )
+  // "Tạo báo lỗi" on a failed manual test case: open the bug dialog with the evidence captured now.
+  useEffect(() => {
+    const h = async (ev: Event): Promise<void> => {
+      const d = (ev as CustomEvent<{ title: string; actual: string }>).detail
+      const serial = activeRef.current
+      if (!serial) return
+      const [snap, clips] = await Promise.all([window.api.bug.snap(serial).catch(() => null), grabRolling().catch(() => [])])
+      if (!snap) return
+      setBugPreset({ snap, clips, trail: recentTrail().map((t) => ({ at: t.at, text: describeStep(t.step) })), title: d.title, actual: d.actual })
+      setBugOpen(true)
+    }
+    window.addEventListener('adbkit:report-bug', h)
+    return () => window.removeEventListener('adbkit:report-bug', h)
+  }, [])
   const dismissCrash = (): void => {
     if (crash?.preset) void window.api.bug.discard(crash.preset.snap.id)
     setCrash(null)
@@ -202,60 +237,101 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [ready])
 
-  const toggle = (p: Panel) => () => setPanel((cur) => (cur === p ? 'none' : p))
+  /** Panel changes shift the whole layout: animate them (morph) instead of jumping. */
+  const go = (next: Panel | ((cur: Panel) => Panel)): void => withTransition(() => setPanel(next))
+  const toggle = (p: Panel) => () => go((cur) => (cur === p ? 'none' : p))
   const tool = (p: Panel, icon: React.ReactNode, label: string) => (
-    <button className={`iconbtn ${panel === p ? 'on' : ''}`} onClick={toggle(p)} disabled={!ready} data-tour={`tool-${p}`} title={label}>
+    <button className={`iconbtn ${panel === p ? 'on' : ''}`} onClick={toggle(p)} disabled={!ready} data-tour={`tool-${p}`} title={FRAMES[p]?.desc ? `${label} — ${FRAMES[p]!.desc}` : label} aria-pressed={panel === p}>
       {icon} <span className="tl">{label}</span>
     </button>
   )
+  /** Panel with its title bar (what it is, one-line purpose, "Cách dùng", close). */
+  const frame = (p: Panel, node: React.ReactNode): React.ReactNode => {
+    const f = FRAMES[p]!
+    return (
+      <PanelFrame
+        key={p}
+        icon={f.icon}
+        title={f.title}
+        desc={f.desc}
+        onHelp={() => {
+          localStorage.setItem('helpTopic', f.help)
+          go('help')
+        }}
+        onClose={() => go('none')}
+      >
+        {node}
+      </PanelFrame>
+    )
+  }
 
   return (
     <div className="app">
-      <TopBar devices={devices} active={active} onSelect={setActive} options={options} onOptions={changeOptions} />
+      <TopBar
+        devices={devices}
+        active={active}
+        onSelect={setActive}
+        options={options}
+        onOptions={changeOptions}
+        extra={
+          <>
+            {details && (
+              <span
+                className="devchip"
+                title={`${details.manufacturer} ${details.model} · Android ${details.android} (API ${details.sdk}) · ${details.abi} · ${details.screen} · Pin ${details.battery}`}
+              >
+                Android {details.android} · Pin {details.battery}
+              </span>
+            )}
+            {device?.transport === 'usb' && ready && (
+              <button className="iconbtn" disabled={busyWifi} onClick={switchWifi} title="Chuyển sang kết nối Wi-Fi (adb tcpip 5555 — mở cổng 5555 trên mạng nội bộ), để rút cáp mà vẫn điều khiển được">
+                <Wifi size={14} /> <span className="tl">Chuyển sang Wi-Fi</span>
+              </button>
+            )}
+            {device?.transport === 'wifi' && (
+              <button className="iconbtn" onClick={() => void window.api.disconnect(device.serial)} title="Ngắt kết nối Wi-Fi với điện thoại">
+                <Unplug size={14} /> <span className="tl">Ngắt kết nối</span>
+              </button>
+            )}
+          </>
+        }
+      />
 
-      <div className="toolbar">
-        {tool('files', <FolderTree size={13} />, 'Tệp')}
-        {tool('logcat', <ScrollText size={13} />, 'Logcat')}
-        {tool('shell', <SquareTerminal size={13} />, 'Shell')}
-        {tool('net', <Network size={13} />, 'Mạng / API')}
-        {tool('perm', <ShieldCheck size={13} />, 'Quyền')}
-        {tool('auto', <Bot size={13} />, 'Tự động test')}
-        {tool('figma', <Ruler size={13} />, 'So với Figma')}
-        {tool('mini', <AppWindow size={13} />, 'Miniapp')}
-        {tool('check', <ScanEye size={13} />, 'Soát UI')}
-        {tool('data', <Database size={13} />, 'Dữ liệu')}
-        {tool('req', <FileText size={13} />, 'Tài liệu YC')}
+      <div className="toolbar" role="toolbar" aria-label="Công cụ">
+        <div className="tgroup" role="group" aria-label="Điện thoại">
+          <span className="tg-cap">Điện thoại</span>
+          {tool('files', <FolderTree size={14} />, 'Tệp')}
+          {tool('logcat', <ScrollText size={14} />, 'Logcat')}
+          {tool('shell', <SquareTerminal size={14} />, 'Shell')}
+        </div>
+        <div className="tgroup" role="group" aria-label="Gỡ lỗi">
+          <span className="tg-cap">Gỡ lỗi</span>
+          {tool('net', <Network size={14} />, 'Mạng / API')}
+          {tool('data', <Database size={14} />, 'Dữ liệu')}
+          {tool('perm', <ShieldCheck size={14} />, 'Quyền')}
+          {tool('mini', <AppWindow size={14} />, 'Miniapp')}
+        </div>
+        <div className="tgroup" role="group" aria-label="Kiểm thử">
+          <span className="tg-cap">Kiểm thử</span>
+          {tool('auto', <Bot size={14} />, 'Tự động test')}
+          {tool('req', <FileText size={14} />, 'Tài liệu YC')}
+          {tool('stress', <Hammer size={14} />, 'Độ bền')}
+          {tool('check', <ScanEye size={14} />, 'Soát UI')}
+          {tool('figma', <Ruler size={14} />, 'So với Figma')}
+        </div>
+        <span className="spacer" />
         <button
           className={`iconbtn ${panel === 'help' ? 'on' : ''}`}
           data-tour="tool-help"
           onClick={toggle('help')}
           title="Hướng dẫn sử dụng từng tính năng, có chế độ chỉ trực tiếp vào các nút"
+          aria-pressed={panel === 'help'}
         >
-          <HelpCircle size={13} /> <span className="tl">Hướng dẫn</span>
+          <HelpCircle size={14} /> <span className="tl">Hướng dẫn</span>
         </button>
         <button className="iconbtn bug-btn" data-tour="bug" disabled={!ready} onClick={() => setBugOpen(true)} title="Báo lỗi ngay: lưu ảnh, video vừa rồi, log, API và các thao tác (F8)">
-          <Bug size={13} /> Báo lỗi
+          <Bug size={14} /> Báo lỗi <kbd>F8</kbd>
         </button>
-        <span className="spacer" />
-        {details && (
-          <span className="devmeta">
-            <span><b>{details.manufacturer} {details.model}</b></span>
-            <span>Android {details.android} (API {details.sdk})</span>
-            <span>{details.abi}</span>
-            <span>{details.screen}</span>
-            <span>Pin {details.battery}</span>
-          </span>
-        )}
-        {device?.transport === 'usb' && ready && (
-          <button className="iconbtn" disabled={busyWifi} onClick={switchWifi} title="adb tcpip 5555 rồi kết nối qua Wi-Fi (mở cổng 5555 trên mạng nội bộ)">
-            <Wifi size={13} /> <span className="tl">Chuyển sang Wi-Fi</span>
-          </button>
-        )}
-        {device?.transport === 'wifi' && (
-          <button className="iconbtn" onClick={() => void window.api.disconnect(device.serial)}>
-            <Unplug size={13} /> Ngắt kết nối
-          </button>
-        )}
       </div>
 
       <div className="workspace">
@@ -282,7 +358,7 @@ export function App() {
                   setAdbInfo(await window.api.installAdb())
                 } catch (e) {
                   setStatus({ text: `Không tải được adb: ${(e as Error).message}`, error: true })
-                  alert(`Không tải được adb: ${(e as Error).message}`)
+                  void tell(`Không tải được adb.\n\n${(e as Error).message}`, { title: 'Tải adb' })
                 } finally {
                   setAdbBusy(false)
                 }
@@ -301,6 +377,17 @@ export function App() {
               <li>Cắm cáp và bấm <b>Cho phép</b> ở hộp thoại “Cho phép gỡ lỗi USB?”</li>
               <li>Hoặc bấm <b>+</b> ở trên để kết nối qua Wi-Fi</li>
             </ol>
+            <div className="empty-actions">
+              <button
+                className="iconbtn primary"
+                onClick={() => {
+                  localStorage.setItem('helpTopic', 'start')
+                  go('help')
+                }}
+              >
+                <HelpCircle size={14} /> Xem hướng dẫn kết nối chi tiết
+              </button>
+            </div>
           </div>
         ) : !ready ? (
           <div className="empty">
@@ -315,8 +402,8 @@ export function App() {
         ) : (
           <>
             {/* Files / Quyền / Install open on the left of the phone; the others on the right. */}
-            {panel === 'files' && <ErrorBoundary key="files" name="Panel Tệp" className="panel wide"><FilesPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'perm' && <ErrorBoundary key="perm" name="Panel Quyền" className="panel wide"><PermissionsPanel serial={device.serial} /></ErrorBoundary>}
+            {panel === 'files' && frame('files', <ErrorBoundary key="files" name="Panel Tệp" className="panel wide"><FilesPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'perm' && frame('perm', <ErrorBoundary key="perm" name="Panel Quyền" className="panel wide"><PermissionsPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'install' && (
               <ErrorBoundary key="install" name="Panel Cài APK" className="panel narrow">
                 <InstallPanel apk={apk} setApk={setApk} history={history} onInstall={install} />
@@ -337,39 +424,52 @@ export function App() {
                 onDropFiles={onDropFiles}
               />
             </ErrorBoundary>
+            {panel === 'none' && (
+              <Launchpad
+                onOpen={(p, prefs) => {
+                  for (const [k, v] of Object.entries(prefs ?? {})) localStorage.setItem(k, v)
+                  go(p as Panel)
+                }}
+              />
+            )}
             {RIGHT_PANELS.includes(panel) && <Splitter onStart={startStageDrag} onDrag={dragStage} onEnd={saveStageW} onReset={resetStageW} />}
-            {panel === 'logcat' && <ErrorBoundary key="logcat" name="Panel Logcat" className="panel wide"><LogcatPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'shell' && <ErrorBoundary key="shell" name="Panel Shell" className="panel wide"><ShellPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'auto' && <ErrorBoundary key="auto" name="Panel Tự động test" className="panel wide"><AutomationPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'net' && <ErrorBoundary key="net" name="Panel Mạng / API" className="panel wide"><NetworkPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'figma' && <ErrorBoundary key="figma" name="Panel So với Figma" className="panel wide"><FigmaPanel serial={device.serial} /></ErrorBoundary>}
+            {panel === 'logcat' && frame('logcat', <ErrorBoundary key="logcat" name="Panel Logcat" className="panel wide"><LogcatPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'shell' && frame('shell', <ErrorBoundary key="shell" name="Panel Shell" className="panel wide"><ShellPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'auto' && frame('auto', <ErrorBoundary key="auto" name="Panel Tự động test" className="panel wide"><AutomationPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'net' && frame('net', <ErrorBoundary key="net" name="Panel Mạng / API" className="panel wide"><NetworkPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'figma' && frame('figma', <ErrorBoundary key="figma" name="Panel So với Figma" className="panel wide"><FigmaPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'help' && (
               <ErrorBoundary key="help" name="Hướng dẫn" className="panel wide">
                 <HelpPanel onTour={(t) => setTour(t.tour ?? null)} />
               </ErrorBoundary>
             )}
-            {panel === 'data' && <ErrorBoundary key="data" name="Panel Dữ liệu" className="panel wide"><DataPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'req' && <ErrorBoundary key="req" name="Panel Tài liệu yêu cầu" className="panel wide"><ReqPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'check' && <ErrorBoundary key="check" name="Panel Soát UI" className="panel wide"><CheckPanel serial={device.serial} /></ErrorBoundary>}
-            {panel === 'mini' && (
-              <ErrorBoundary key="mini" name="Panel Miniapp" className="panel wide">
-                <MiniAppPanel
-                  serial={device.serial}
-                  onWatchNetwork={(pkg) => {
-                    localStorage.setItem('netPkg', pkg)
-                    setPanel('net')
-                  }}
-                />
-              </ErrorBoundary>
-            )}
+            {panel === 'data' && frame('data', <ErrorBoundary key="data" name="Panel Dữ liệu" className="panel wide"><DataPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'req' && frame('req', <ErrorBoundary key="req" name="Panel Tài liệu yêu cầu" className="panel wide"><ReqPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'stress' && frame('stress', <ErrorBoundary key="stress" name="Panel Độ bền" className="panel wide"><StressPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'check' && frame('check', <ErrorBoundary key="check" name="Panel Soát UI" className="panel wide"><CheckPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'mini' &&
+              frame(
+                'mini',
+                <ErrorBoundary key="mini" name="Panel Miniapp" className="panel wide">
+                  <MiniAppPanel
+                    serial={device.serial}
+                    onWatchNetwork={(pkg) => {
+                      localStorage.setItem('netPkg', pkg)
+                      go('net')
+                    }}
+                  />
+                </ErrorBoundary>
+              )}
           </>
         )}
       </div>
 
+      <DialogHost />
+
       {tour && (
         <Tour
           steps={tour}
-          onPanel={(p) => setPanel(p === 'none' ? 'none' : (p as Panel))}
+          onPanel={(p) => go(p === 'none' ? 'none' : (p as Panel))}
           onClose={() => setTour(null)}
         />
       )}

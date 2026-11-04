@@ -328,6 +328,15 @@ export function CheckPanel({ serial }: { serial: string }) {
   const [scanning, setScanning] = useState(false)
   const [scanInfo, setScanInfo] = useState('')
   const [sel, setSel] = useState<number | null>(null)
+  const [tab, setTab] = useState<'scan' | 'conf' | 'gps'>(() => {
+    const t = localStorage.getItem('checkTab')
+    return t === 'conf' || t === 'gps' ? t : 'scan'
+  })
+  const pickTab = (t: 'scan' | 'conf' | 'gps'): void => {
+    setTab(t)
+    localStorage.setItem('checkTab', t)
+    autoStore.set({ highlight: null })
+  }
   const [filter, setFilter] = useState<IssueKind | 'all'>('all')
 
   const load = useCallback(async () => {
@@ -426,7 +435,15 @@ export function CheckPanel({ serial }: { serial: string }) {
 
   return (
     <div className="panel wide ck-panel">
+      <div className="panel-head">
+        <div className="seg">
+          <button className={tab === 'scan' ? 'on' : ''} onClick={() => pickTab('scan')} title="Tự tìm lỗi giao diện trên màn hình đang mở">Soát giao diện</button>
+          <button className={tab === 'conf' ? 'on' : ''} onClick={() => pickTab('conf')} title="Chế độ tối, cỡ chữ, kích thước hiển thị, hiệu ứng">Cấu hình máy</button>
+          <button className={tab === 'gps' ? 'on' : ''} onClick={() => pickTab('gps')} title="Giả vị trí GPS của điện thoại">Vị trí GPS</button>
+        </div>
+      </div>
       <div className="ck-body">
+        {tab === 'conf' && (
         <section className="mini-sec">
           <div className="mini-head">
             <SlidersHorizontal size={14} />
@@ -472,9 +489,11 @@ export function CheckPanel({ serial }: { serial: string }) {
           {note && <div className={`ck-note ${note.bad ? 'bad' : ''}`}>{note.text}</div>}
           {conf && conf.changed.length > 0 && <div className="ck-note muted">Thiết lập gốc đã được ghi nhớ — nhớ bấm Khôi phục khi test xong (vẫn khôi phục được sau khi tắt ADB Kit).</div>}
         </section>
+        )}
 
-        <GpsSection serial={serial} />
+        {tab === 'gps' && <GpsSection serial={serial} />}
 
+        {tab === 'scan' && (
         <section className="mini-sec">
           <div className="mini-head">
             <ScanEye size={14} />
@@ -527,6 +546,7 @@ export function CheckPanel({ serial }: { serial: string }) {
             </>
           )}
         </section>
+        )}
       </div>
     </div>
   )

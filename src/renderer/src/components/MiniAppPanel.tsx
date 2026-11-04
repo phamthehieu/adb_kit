@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppWindow, Bug, Eraser, ExternalLink, Globe, Link, Loader2, Network, Play, Plus, RefreshCw, Timer, X } from 'lucide-react'
 import type { MiniAppInfo, MiniAppList, OpenTiming, WebPage, WebViewProc } from '@shared/miniapp'
 import { PackagePicker } from './PackagePicker'
+import { ask } from '../lib/dialog'
 
 interface SavedLink {
   name: string
@@ -192,7 +193,7 @@ export function MiniAppPanel({ serial, onWatchNetwork }: { serial: string; onWat
   }
 
   const clearCache = async (a: MiniAppInfo): Promise<void> => {
-    if (!confirm(`Xóa gói đã tải của miniapp "${a.name}"?\n\nApp sẽ bị đóng lại; lần mở miniapp tiếp theo sẽ tải lại bản mới nhất từ server.`)) return
+    if (!(await ask(`Xóa gói đã tải của miniapp "${a.name}"?\n\nApp sẽ bị đóng lại; lần mở miniapp tiếp theo sẽ tải lại bản mới nhất từ server.`, { danger: true, ok: 'Xóa gói' }))) return
     try {
       await window.api.mini.clearCache(serial, pkg, a.appId)
       say(`Đã xóa cache "${a.name}" và đóng app`)
@@ -233,7 +234,7 @@ export function MiniAppPanel({ serial, onWatchNetwork }: { serial: string; onWat
   const measure = async (a: MiniAppInfo, url = fill(tpl, a)): Promise<void> => {
     const isApp = !!list?.apps.some((x) => x.appId === a.appId)
     const c = cold && isApp
-    if (c && !confirm(`Đo "${a.name}" như lần đầu: xóa gói đã tải và đóng app, rồi mở lại?`)) return
+    if (c && !(await ask(`Đo "${a.name}" như lần đầu?\n\nXóa gói đã tải và đóng app, rồi mở lại.`, { danger: true, ok: 'Xóa và đo' }))) return
     setMeasuring(a.name)
     try {
       const t = await window.api.mini.measure(serial, pkg, url, isApp ? a.appId : undefined, c)

@@ -5,7 +5,7 @@
  */
 
 /** Panels a tour step can open (same ids as App's panels). */
-export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req'
+export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req' | 'stress'
 
 /** Where a step points: a CSS selector, or a button / label whose text contains `text`. */
 export type Target = string | { text: string; within?: string }
@@ -61,7 +61,10 @@ export const TOPICS: HelpTopic[] = [
       ['Tên máy (thanh trên cùng)', 'Bấm để chuyển giữa nhiều máy đang cắm. Biểu tượng cáp = USB, sóng = Wi-Fi. Chữ vàng "unauthorized" = chưa bấm Cho phép trên điện thoại.'],
       ['+', 'Kết nối máy qua Wi-Fi (nhập ip:cổng) hoặc ghép đôi Gỡ lỗi không dây (Android 11+).'],
       ['⚙ (góc phải)', 'Chất lượng mirror: độ phân giải tối đa, bitrate, FPS. Máy tính yếu hoặc mạng Wi-Fi chậm → chọn 1024 / 4 Mbps / 30.'],
-      ['Thanh công cụ', 'Mỗi nút mở một bảng bên cạnh màn hình điện thoại; bấm lại để đóng. Kéo thanh dọc giữa điện thoại và bảng để đổi độ rộng, bấm đúp để về mặc định.'],
+      ['Thanh công cụ', 'Mỗi nút mở một bảng bên cạnh màn hình điện thoại; bấm lại để đóng. Công cụ xếp theo nhóm: Điện thoại (Tệp, Logcat, Shell), Gỡ lỗi (Mạng/API, Dữ liệu, Quyền, Miniapp), Kiểm thử (Tự động test, Tài liệu YC, Độ bền, Soát UI, So với Figma). Khi cửa sổ hẹp, chỉ công cụ đang mở hiện tên — rê chuột vào biểu tượng để xem tên các nút còn lại. Kéo thanh dọc giữa điện thoại và bảng để đổi độ rộng, bấm đúp để về mặc định.'],
+      ['Màn hình "Bạn muốn làm gì?"', 'Khi chưa mở bảng nào, bên phải điện thoại hiện danh sách việc hay làm (test tự động, test tay theo KBKT, đăng nhập sẵn, điền OTP, soát giao diện, xem API, xem log…). Bấm một thẻ để mở đúng công cụ ở đúng tab.'],
+      ['Thanh tiêu đề của bảng', 'Mỗi bảng có tên và một dòng mô tả. "Cách dùng" mở đúng mục hướng dẫn của bảng đó; dấu × đóng bảng.'],
+      ['Hộp thoại xác nhận', 'Việc xóa hoặc đổi dữ liệu luôn hỏi lại. Nút an toàn (Hủy) được chọn sẵn khi hành động không hoàn tác được; Esc = hủy.'],
       ['Thanh kéo giữa hai khung', 'Các khung xếp chồng (danh sách ↔ chi tiết, các bước ↔ nhật ký…) kéo được để đổi chiều cao / độ rộng. Hai nút mũi tên ở giữa thanh ẩn khung này để khung kia chiếm hết chỗ; bấm lại để mở. Bấm đúp thanh để về mặc định. Kích thước được nhớ.'],
       ['Dòng chữ dưới cùng', 'Thông báo kết quả gần nhất (ví dụ đường dẫn ảnh vừa chụp — bấm để mở thư mục).']
     ],
@@ -278,7 +281,7 @@ export const TOPICS: HelpTopic[] = [
     when: ['Test màn hình chờ (loading), nút thử lại, thông báo mất mạng.', 'Kiểm tra app không bị treo / crash khi mạng yếu.'],
     steps: [
       'Mở tab Mạng / API và chọn app (đang theo dõi).',
-      'Ở dòng "Giả lập mạng cho app" chọn: Chậm (mỗi API trễ ~2,5 giây), Chập chờn (30% API lỗi, còn lại trễ ngẫu nhiên tới 3 giây), Mất mạng (mọi API lỗi).',
+      'Bấm "Giả lập & phát lại" để mở hộp giả lập. Ở mục "Giả lập mạng cho app" chọn: Chậm (mỗi API trễ ~2,5 giây), Chập chờn (30% API lỗi, còn lại trễ ngẫu nhiên tới 3 giây), Mất mạng (mọi API lỗi).',
       'Thao tác trên app và quan sát. Chọn "Bình thường" để tắt.',
       'Cần mất mạng thật (cả app native, cả ảnh / video): chọn số giây → "Ngắt mạng". Wi-Fi và dữ liệu di động tắt rồi tự bật lại.'
     ],
@@ -288,8 +291,12 @@ export const TOPICS: HelpTopic[] = [
       '"Ngắt mạng" chạy lệnh bật lại ngay trên điện thoại: kể cả khi tắt ADB Kit, mạng vẫn tự về. Chỉ dùng được khi cắm cáp USB.'
     ],
     tour: [
-      { target: '.net-sim select', panel: 'net', title: 'Giả lập mạng cho app', body: 'Chọn Chậm, Chập chờn hoặc Mất mạng — áp cho mọi API của app (WebView, miniapp, Tauri).' },
-      { target: { text: 'Ngắt mạng', within: '.net-sim' }, panel: 'net', title: 'Mất mạng thật', body: 'Tắt Wi-Fi + dữ liệu di động của cả máy trong số giây đã chọn rồi tự bật lại — áp cho cả app native.' }
+      {
+        target: '.net-sim-bar',
+        panel: 'net',
+        title: 'Giả lập & phát lại',
+        body: 'Bấm nút này để mở hộp giả lập: mạng Chậm / Chập chờn / Mất mạng cho mọi API của app (WebView, miniapp, Tauri); ghi & phát lại phản hồi; và "Ngắt mạng" thật — tắt Wi-Fi + dữ liệu di động của cả máy rồi tự bật lại, áp cho cả app native.'
+      }
     ]
   },
   {
@@ -300,7 +307,7 @@ export const TOPICS: HelpTopic[] = [
     when: ['Test luồng "người dùng từ chối quyền máy ảnh / vị trí".', 'Test lần đầu mở app (hộp thoại xin quyền).'],
     steps: [
       'Mở tab Quyền, chọn app.',
-      'Nhóm "Quyền cần người dùng cho phép": bật / tắt bằng công tắc. Chữ "dùng … trước" = lần cuối app dùng quyền đó.',
+      'Nhóm "Quyền cần người dùng cho phép": bật / tắt bằng công tắc. Mỗi quyền ghi tên dễ hiểu (ví dụ "Vị trí chính xác") kèm tên kỹ thuật bên dưới (ACCESS_FINE_LOCATION). Chữ "dùng … trước" = lần cuối app dùng quyền đó.',
       'Nhóm "Quyền đặc biệt" (hiển thị trên app khác, báo thức chính xác…): chọn cho phép / chặn / từ chối / mặc định.',
       'Nhóm "Quyền tự cấp khi cài đặt": chỉ xem, không đổi được.'
     ],
@@ -384,7 +391,8 @@ export const TOPICS: HelpTopic[] = [
       'Mở tab Tự động test › Kịch bản. Chọn app cần test ở ô đầu.',
       'Bấm "Ghi thao tác" (chấm đỏ). Dùng điện thoại bên trái: mỗi chạm, vuốt, cuộn, gõ chữ, Back/Home thành một bước. Chờ dòng "✓ Sẵn sàng" trước mỗi lần chạm để bước được gắn với phần tử (không chỉ toạ độ).',
       'Bấm "Dừng ghi". Thêm bước kiểm tra: "Soi phần tử" → bấm lên chữ / nút trên điện thoại → chọn "+ Kiểm tra có hiển thị", "+ Kiểm tra không hiển thị", "+ Chờ xuất hiện", "+ Bấm" hoặc "+ Nếu thấy thì bấm".',
-      'Thêm bước khác bằng "+ Thêm bước…" (mở app, chờ, chụp, so sánh ảnh, kiểm tra API, quyền, mạng…).',
+      'Thêm bước khác bằng nút "Thêm bước": menu chia nhóm (Hay dùng, Thao tác, Chờ & kiểm tra, App & môi trường, Giả lập & API), mỗi mục có mô tả một dòng và ô tìm ở trên cùng.',
+      'Bấm vào một bước để mở ô sửa nội dung của nó; các bước còn lại thu gọn một dòng. Biểu tượng màu cho biết nhóm: xanh dương = thao tác, xanh lá = chờ & kiểm tra, tím = app & môi trường, cam = giả lập.',
       'Lưu kịch bản (biểu tượng đĩa) thành file .json.',
       'Bấm "Chạy". Theo dõi từng bước xanh / đỏ. Xong sẽ có báo cáo HTML.'
     ],
@@ -411,7 +419,7 @@ export const TOPICS: HelpTopic[] = [
         '+ Thêm bước › "Mở app" (tick xóa dữ liệu nếu muốn như mới cài).',
         'Ghi thao tác: chạm ô số điện thoại, gõ số, bấm "Đăng nhập với OTP"… Dừng ghi.',
         'Soi phần tử: bấm lên chữ "Trang chủ" → "+ Chờ xuất hiện" (đăng nhập thành công).',
-        'Lưu, Chạy 5 lượt, bật Quay video + Ghi API.',
+        'Lưu, Chạy 5 lượt, mở "Tùy chọn chạy" và bật Quay video + Ghi API.',
         'Nếu lỗi: báo cáo có ảnh lúc lỗi, video, log, API và nội dung lỗi để dán vào ticket.'
       ]
     },
@@ -427,7 +435,7 @@ export const TOPICS: HelpTopic[] = [
       { target: { text: 'Ghi thao tác' }, panel: 'auto', title: 'Ghi thao tác', body: 'Bấm rồi dùng điện thoại bên trái — mỗi thao tác thành một bước. Chờ "✓ Sẵn sàng" trước mỗi lần chạm.' },
       { target: { text: 'Soi phần tử' }, panel: 'auto', title: 'Soi phần tử', body: 'Bấm lên phần tử trên màn hình, rồi chọn + Kiểm tra có hiển thị / không hiển thị / Chờ xuất hiện / Bấm.' },
       { target: { text: 'Chạy' }, panel: 'auto', title: 'Chạy', body: 'Chạy kịch bản; chọn số Lượt và tốc độ bên phải.' },
-      { target: '.auto-row.opts', panel: 'auto', title: 'Tùy chọn khi chạy', body: 'Quay video, bắt lỗi WebView, ghi API, đo hiệu năng… "+ Thêm bước…" ở cuối dòng.' },
+      { target: { text: 'Tùy chọn chạy' }, panel: 'auto', title: 'Tùy chọn khi chạy', body: 'Bấm để mở: quay video, bắt lỗi WebView, ghi API, đo hiệu năng, và trạng thái app trước khi chạy. Dòng ngay bên dưới luôn tóm tắt đang bật gì. Nút "Thêm bước" nằm ở đầu danh sách bước.' },
       { target: '.steps', panel: 'auto', title: 'Danh sách bước', body: 'Bấm để chọn bước; Lên / Xuống / Nhân bản / Xóa ở cuối dòng. Khi chạy, bước xanh = đạt, đỏ = lỗi.' }
     ]
   },
@@ -435,10 +443,11 @@ export const TOPICS: HelpTopic[] = [
     id: 'steps',
     group: 'Kiểm thử',
     title: 'Các loại bước trong kịch bản',
-    summary: 'Danh sách bước "+ Thêm bước…" và dùng khi nào',
-    steps: ['Mở tab Tự động test › Kịch bản, chọn ở ô "+ Thêm bước…". Bước được thêm sau bước đang chọn.'],
+    summary: 'Các bước trong menu "Thêm bước" và dùng khi nào',
+    steps: ['Mở tab Tự động test › Kịch bản, bấm nút "Thêm bước", gõ vài chữ để tìm hoặc chọn theo nhóm. Bước được thêm sau bước đang chọn.'],
     buttons: [
       ['Mở app / Tắt hẳn app', 'Khởi động app (có thể xóa dữ liệu trước) / force-stop.'],
+      ['Khôi phục trạng thái app (đăng nhập sẵn)', 'Đưa dữ liệu app về một bản đã lưu (tab Dữ liệu › Trạng thái app) rồi mở app — để mỗi kịch bản bắt đầu từ tài khoản đã đăng nhập. Chỉ app bản debug; có hỏi xác nhận trước khi chạy.'],
       ['Chờ (ms) / Chờ chữ xuất hiện', 'Đợi cố định / đợi tới khi một chữ hiện ra (có giới hạn thời gian).'],
       ['Kiểm tra chữ có hiển thị', 'Bước kiểm tra: đạt nếu chữ có (hoặc không có) trên màn hình.'],
       ['Nếu thấy chữ thì bấm (popup…)', 'Bấm nếu có, bỏ qua nếu không — cho popup lúc có lúc không.'],
@@ -463,7 +472,7 @@ export const TOPICS: HelpTopic[] = [
     summary: 'Gom kịch bản, nhập testcase từ KBKT, ghi kết quả, chạy lại khi lỗi',
     when: ['Chạy cả bộ testcase hồi quy trước khi release.', 'Đánh kết quả test vào file KBKT (mẫu BES / BCCS).'],
     steps: [
-      'Tab Tự động test › Bộ test. Điền Tên bộ test, Mã TC, Người lập, Người test (ghi vào file KBKT).',
+      'Tab Tự động test › Bộ test. Điền Tên bộ test. Bấm "Chi tiết bộ test" để đặt Mã testcase (tiền tố), Người lập, Người test, Chạy lại khi lỗi, Mẫu KBKT (ghi vào file KBKT); khi thu gọn có một dòng tóm tắt các giá trị này.',
       'Cách 1: "Thêm kịch bản…" chọn các file .json đã lưu — mỗi kịch bản là một testcase.',
       'Cách 2: "Nhập testcase từ file KBKT…" chọn file Excel tester đã viết. Mỗi dòng: gắn kịch bản tự động, hoặc đánh kết quả test tay (P / F / PE).',
       'Gắn file CSV vào một kịch bản để chạy nó với nhiều bộ dữ liệu (dùng ${tên_cột} trong các bước).',
@@ -473,12 +482,165 @@ export const TOPICS: HelpTopic[] = [
       ['Chạy lại khi lỗi', 'Testcase lỗi chạy lại 1–2 lần; kết quả vào cột KQ lần 2 / lần 3.'],
       ['Mẫu KBKT', 'BES, BCCS, hoặc file mẫu riêng cho file xuất ra.'],
       ['Trước khi chạy / Quyền', 'Áp dụng trước MỖI testcase (và mỗi lần chạy lại): Tắt hẳn app (mặc định), Xóa dữ liệu để như mới cài, và cấp hết / thu hồi hết quyền. Mỗi kịch bản dùng "App cần test" của chính nó nên bộ test nhiều app vẫn đúng. Cũng áp dụng khi chạy trên nhiều máy.'],
-      ['Ghi kết quả test tay', 'Ghi ngay kết quả test tay vào bản sao file KBKT mà không chạy gì.'],
+      ['Ghi kết quả test tay', 'Ghi ngay kết quả test tay vào bản sao file KBKT mà không chạy gì. Muốn kèm ảnh / log / video cho từng kết quả, dùng tab "Test tay" (xem mục Test tay theo KBKT).'],
       ['Nhập lại', 'Đọc lại file KBKT, giữ các liên kết / kết quả đã đánh.']
     ],
     tips: ['Chạy hằng đêm không cần mở cửa sổ: "ADB Kit.exe" --run "đường-dẫn\\bo-test.json" [--serial máy] [--out thư-mục] [--fresh off|stop|clear] [--perms keep|all|none]. Mã thoát 0 = đạt, 1 = có lỗi, 2 = không chạy được.'],
     tour: [
       { target: { text: 'Bộ test', within: '.auto .seg' }, panel: 'auto', title: 'Bộ test', body: 'Bấm để chuyển sang Bộ test (gom nhiều kịch bản, xuất KBKT).' }
+    ]
+  },
+  {
+    id: 'manual',
+    group: 'Kiểm thử',
+    title: 'Test tay theo KBKT, tự lưu bằng chứng',
+    summary: 'Chấm Đạt / Lỗi / Xem xét từng dòng KBKT; ảnh, log, video tự gắn vào file',
+    when: [
+      'Tester test tay cả bộ testcase và phải đính kèm bằng chứng cho từng dòng.',
+      'Dev hỏi "lỗi này trông thế nào, log đâu?" — mọi thứ đã nằm sẵn trong một thư mục.',
+      'Cần bàn giao kết quả test cho khách / PM kèm file KBKT đã điền.'
+    ],
+    steps: [
+      'Tab Tự động test › Test tay. Lần đầu bấm "Nhập file KBKT…" và chọn file Excel (mẫu BES hoặc BCCS). File gốc không bị sửa.',
+      'Chọn một testcase ở danh sách bên trái (mở sẵn dòng chưa test đầu tiên). Đọc "Các bước" và "Kết quả mong muốn".',
+      'Làm theo các bước trên điện thoại (thao tác ngay trên màn hình mirror).',
+      'Bấm Đạt (Alt+1), Lỗi (Alt+2) hoặc Xem xét (Alt+3). Ghi chú gõ ở ô "Ghi chú" trước khi bấm sẽ đi kèm kết quả.',
+      'ADB Kit tự chụp màn hình lúc bấm; với Lỗi kèm thêm log (và crash nếu có) và video khoảng 20 giây vừa rồi. Rồi tự nhảy sang testcase chưa test kế tiếp.',
+      'Xong bấm "Ghi vào KBKT": tạo một bản sao file KBKT có cột kết quả đã điền, ô ghi chú là liên kết mở thẳng trang bằng chứng.'
+    ],
+    buttons: [
+      ['Tất cả / Chưa test / Lỗi / Đạt', 'Lọc danh sách; số trong ngoặc là số testcase.'],
+      ['Tìm testcase…', 'Lọc theo mã, nhóm hoặc nội dung.'],
+      ['Đạt, Lỗi, Xem xét', 'Ghi kết quả (PE = cần xem xét lại / đạt có ngoại lệ). Phím tắt Alt+1 / Alt+2 / Alt+3; Alt+↑ / Alt+↓ đổi testcase.'],
+      ['Lỗi: kèm video 20 giây', 'Khi chấm Lỗi, gắn video màn hình khoảng 20 giây ngay trước đó (cần đang mirror).'],
+      ['Lỗi: kèm log', 'Khi chấm Lỗi / Xem xét, lưu logcat 4000 dòng cuối và bộ đệm crash.'],
+      ['Tự chuyển testcase kế', 'Chấm xong tự chọn testcase chưa test tiếp theo.'],
+      ['Bằng chứng', 'Mở thư mục Documents\\ADB Kit\\test-tay chứa mọi bằng chứng.'],
+      ['Ghi vào KBKT', 'Ghi các kết quả vào bản sao file KBKT (trong thư mục test-tay của file đó). Ô liên kết tới trang bằng chứng.'],
+      ['Xem bằng chứng / Bỏ kết quả', 'Mở trang bằng chứng của kết quả hiện tại / xóa kết quả để chấm lại.'],
+      ['Tạo báo lỗi', 'Hiện sau khi chấm Lỗi: mở hộp Báo lỗi với tiêu đề, các bước và kết quả mong muốn đã điền sẵn để đẩy lên Jira.']
+    ],
+    example: {
+      title: 'Test 20 dòng nạp tiền',
+      steps: [
+        'Nhập KBKT_ThanhToan.xlsx. Danh sách hiện 20 dòng, thanh tiến độ 0/20.',
+        'Dòng TT_01: làm theo bước, thấy "Thành công" → bấm Đạt (Alt+1). Tự sang TT_02.',
+        'TT_02: nhập -1, app crash → gõ ghi chú "Nhập số âm bị crash" → bấm Lỗi. Bấm "Tạo báo lỗi" để gửi Jira.',
+        'Cuối buổi bấm "Ghi vào KBKT", mở file Excel: cột kết quả đã điền, bấm vào ô ghi chú dòng TT_02 để xem ảnh, log, video.'
+      ]
+    },
+    faq: [
+      ['Báo "CHƯA có bằng chứng"', 'Điện thoại tắt màn hình / mất kết nối nên không chụp được. Kết quả vẫn được ghi; mở khóa máy rồi bấm lại nút kết quả để chụp bù.'],
+      ['Không có video dù đã tick', 'Video chỉ có khi đang mirror và màn hình có chuyển động trong 20 giây vừa rồi.'],
+      ['Mở link trong Excel không được', 'Giữ nguyên cấu trúc thư mục test-tay khi chuyển máy (file KBKT và các thư mục bằng chứng cạnh nhau); nén cả thư mục để gửi.'],
+      ['Kết quả có hiện bên tab Bộ test không?', 'Có — cùng một danh sách; ô "test tay…" của dòng đó hiện đúng kết quả đã chấm.']
+    ],
+    tips: ['Tick đủ ba ô tùy chọn thì mỗi lần chấm Lỗi bạn có đủ ảnh + log + video mà không phải làm gì thêm.', 'Bằng chứng nằm ở Documents\\ADB Kit\\test-tay\\<tên KBKT>\\<mã testcase>\\<giờ>_<kết quả>\\ (index.html, screenshot.png, logcat.txt, video, info.json).'],
+    tour: [
+      { target: { text: 'Test tay', within: '.auto .seg' }, panel: 'auto', title: 'Test tay', body: 'Chuyển sang tab Test tay để chấm từng dòng KBKT.' },
+      { target: '.mt-actions', panel: 'auto', title: 'Đạt / Lỗi / Xem xét', body: 'Bấm sau khi làm xong các bước trên điện thoại (Alt+1 / 2 / 3). Ảnh, log, video tự được lưu.' },
+      { target: { text: 'Ghi vào KBKT', within: '.mt-head' }, panel: 'auto', title: 'Ghi vào KBKT', body: 'Tạo bản sao file KBKT có kết quả và liên kết tới bằng chứng.' }
+    ]
+  },
+  {
+    id: 'appstate',
+    group: 'Kiểm thử',
+    title: 'Lưu & khôi phục trạng thái app (đăng nhập sẵn)',
+    summary: 'Chép dữ liệu app về máy tính, đổi qua lại giữa các tài khoản trong vài giây',
+    when: [
+      'Mỗi lần test phải đăng nhập lại (OTP, eKYC…) mất nhiều phút.',
+      'Cần nhiều tài khoản mẫu: A đủ số dư, B chưa xác thực, C bị khóa — đổi qua lại liên tục.',
+      'Muốn mỗi testcase tự động bắt đầu từ cùng một tài khoản đã đăng nhập.',
+      'Cần tái hiện lỗi từ một trạng thái dữ liệu đặc biệt mà đồng nghiệp đã chuẩn bị.'
+    ],
+    steps: [
+      'Dùng app bản debug. Đăng nhập và đưa app tới trạng thái muốn lưu.',
+      'Mở tab Dữ liệu › Trạng thái app. Chọn app, đặt tên (ví dụ "Tài khoản A – đã đăng nhập"), bấm "Lưu trạng thái". App sẽ được tắt hẳn trong lúc chép.',
+      'Khi cần dùng lại: bấm "Khôi phục" ở dòng đó. Dữ liệu hiện tại của app bị thay bằng bản đã lưu và app tự mở lại.',
+      'Trong kịch bản tự động: "Thêm bước" › "Khôi phục trạng thái app", chọn app và tên trạng thái. Đặt bước này ngay đầu kịch bản.'
+    ],
+    buttons: [
+      ['Lưu trạng thái', 'Chép databases, files, shared_prefs, no_backup, datastore và các thư mục app_* (gồm cả dữ liệu WebView) về máy tính. Thư mục cache không được lưu.'],
+      ['Khôi phục', 'Xóa dữ liệu hiện tại của app (trừ cache) rồi giải nén bản đã lưu. Có hỏi xác nhận vì dữ liệu hiện tại sẽ mất.'],
+      ['Mở app sau khi khôi phục', 'Tick để app tự mở sau khi khôi phục.'],
+      ['Bút chì', 'Đổi tên / ghi chú.'],
+      ['Mũi tên xuống (Xuất)', 'Xuất thành file .adbstate để gửi đồng nghiệp.'],
+      ['Nhập từ file', 'Nhập file .adbstate nhận được.'],
+      ['Chỉ app đang chọn', 'Chỉ hiện các trạng thái của app đang chọn ở ô phía trên.']
+    ],
+    example: {
+      title: 'Hai tài khoản, một bộ test',
+      steps: [
+        'Đăng nhập tài khoản A trên app staging → lưu "Tài khoản A". Đăng xuất, đăng nhập tài khoản B → lưu "Tài khoản B".',
+        'Tạo kịch bản "Đổi gói cước": bước 1 "Khôi phục trạng thái app" chọn "Tài khoản A", các bước sau thao tác đổi gói.',
+        'Nhân đôi kịch bản, đổi bước 1 thành "Tài khoản B". Cả hai chạy từ trạng thái sạch, không phải đăng nhập.'
+      ]
+    },
+    faq: [
+      ['Báo "không phải bản debug"', 'Android chỉ cho đọc dữ liệu riêng của app build debuggable (run-as). Bản release không làm được.'],
+      ['Khôi phục xong app vẫn đòi đăng nhập', 'Token đã hết hạn phía server, hoặc app lưu phiên trong nơi khác (Keystore / tài khoản hệ thống). Lưu lại trạng thái mới khi vừa đăng nhập.'],
+      ['"Lưu từ bản x, máy đang cài bản y"', 'App đã cập nhật nên cấu trúc dữ liệu có thể khác. Thử dùng; nếu lỗi lạ, lưu lại bằng bản hiện tại.'],
+      ['Dung lượng bao nhiêu?', 'Thường vài chục MB vì đã bỏ cache (một app thật giảm từ 174 MB còn 43 MB). Giới hạn mỗi bản lưu là 200 MB.']
+    ],
+    tips: ['Bản lưu chứa token đăng nhập: chỉ để trên máy bạn, đừng gửi công khai.', 'Lệnh chạy tự động: bước "Khôi phục trạng thái app" dùng được cả khi chạy bằng dòng lệnh --run trên chính máy tính đã lưu.'],
+    tour: [
+      { target: { text: 'Trạng thái app', within: '.dt-panel .seg' }, panel: 'data', title: 'Trạng thái app', body: 'Tab này lưu và khôi phục dữ liệu / đăng nhập của app.' },
+      { target: '.st-form', panel: 'data', title: 'Lưu', body: 'Chọn app (bản debug), đặt tên rồi bấm Lưu trạng thái.' }
+    ]
+  },
+  {
+    id: 'stress',
+    group: 'Kiểm thử',
+    title: 'Độ bền: giả lập tình huống khó',
+    summary: 'Giết tiến trình, thiếu RAM, Doze, đổi ngôn ngữ / giờ, đầy bộ nhớ — bắt lỗi chỉ có ở máy người dùng',
+    when: [
+      'App "mở lại là mất màn hình / mất dữ liệu đang nhập" sau khi để nền một lúc.',
+      'Khách báo lỗi chỉ xảy ra trên máy yếu, máy đầy bộ nhớ, đổi múi giờ hay bật tiết kiệm pin.',
+      'Thông báo / đồng bộ nền chậm hoặc ngừng khi máy để yên (Doze).',
+      'Muốn test giao diện tiếng Ả Rập (phải sang trái) hoặc văn bản tiếng Đức quá dài.'
+    ],
+    steps: [
+      'Mở tab Độ bền. Chọn "App cần test" ở ô phía trên (cho các mục có ghi theo app).',
+      'Chọn một mục, bấm "Chạy" / "Áp dụng" hoặc gạt công tắc. Kết quả hiện ngay bên dưới mục đó, kèm gợi ý nên quan sát gì.',
+      'Mục đổi thiết lập được ghi nhớ trong thanh "Đang thay đổi trên máy" ở trên cùng.',
+      'Test xong bấm "Bình thường" ở từng mục, hoặc "Khôi phục tất cả" để trả máy về như ban đầu.'
+    ],
+    buttons: [
+      ['Giết tiến trình rồi quay lại app', 'Về màn hình chính, hệ điều hành giết tiến trình của app, rồi mở lại. App phải khôi phục đúng màn hình và dữ liệu đang nhập.'],
+      ['Báo thiếu bộ nhớ cho app', 'Gửi tín hiệu hết RAM theo mức (vừa → sắp bị giết) để app giải phóng bộ nhớ.'],
+      ['Giết mọi app đang chạy nền', 'Dọn mọi tiến trình nền (cả máy).'],
+      ['Không giữ hoạt động', 'Mỗi màn hình bị hủy ngay khi rời đi — lộ lỗi không lưu trạng thái màn hình.'],
+      ['Chế độ Doze sâu', 'Giả lập máy để yên lâu: mạng, báo thức, tác vụ nền bị chặn. Thoát bằng công tắc hoặc Khôi phục.'],
+      ['Nhóm chờ của app / Cấm app chạy nền', 'Hạn chế tác vụ nền của riêng app như khi người dùng bật hạn chế hoạt động nền.'],
+      ['Giả lập mức pin / Tiết kiệm pin', 'Pin 5%, 15%, 50% giả (không rút sạc thật) và chế độ tiết kiệm pin.'],
+      ['Xoay màn hình, Tắt hiệu ứng, Hiện điểm chạm', 'Khóa hướng ngang / dọc; tắt hiệu ứng cho test tự động ổn định; hiện chấm khi chạm để quay video lỗi.'],
+      ['Ngôn ngữ riêng của app', 'Đổi ngôn ngữ chỉ cho app này (Android 13 trở lên). Máy cũ dùng "Mở cài đặt ngôn ngữ của máy".'],
+      ['Múi giờ / Đổi đồng hồ máy', 'Đổi múi giờ hoặc đẩy giờ tới / lui để thử token hết hạn, OTP, ưu đãi theo ngày. Một số hãng máy chặn — khi đó có thông báo rõ.'],
+      ['Chế độ máy bay', 'Cắt mạng ở mức hệ thống. Không dùng khi đang nối adb qua Wi-Fi.'],
+      ['Làm đầy bộ nhớ máy', 'Tạo tệp lớn để chỉ còn 1 GB / 500 MB / 200 MB / 100 MB. Luôn chừa tối thiểu 100 MB.'],
+      ['Khôi phục tất cả', 'Trả mọi thay đổi về đúng giá trị ban đầu.']
+    ],
+    example: {
+      title: 'Kiểm tra app giữ dữ liệu khi bị hệ điều hành giết',
+      steps: [
+        'Mở app, vào màn hình thanh toán và nhập dở số tiền.',
+        'Tab Độ bền › chọn app › "Giết tiến trình rồi quay lại app" › Chạy.',
+        'App mở lại: về đúng màn hình thanh toán? Số tiền đã nhập còn? Phiên đăng nhập còn? Không → ghi lỗi (bấm F8).',
+        'Bật tiếp "Không giữ hoạt động" rồi chuyển qua lại các màn hình để tìm các màn không lưu trạng thái.'
+      ]
+    },
+    faq: [
+      ['Đã đóng ADB Kit nhưng máy vẫn bị đổi', 'Thay đổi được ghi nhớ trong file trên máy tính. Mở lại ADB Kit › Độ bền, thanh "Đang thay đổi trên máy" còn đó, bấm "Khôi phục tất cả".'],
+      ['"Máy không cho đổi múi giờ / đồng hồ qua adb"', 'Hãng máy chặn quyền này. Đổi tay trong Cài đặt. ADB Kit đã trả thiết lập giờ tự động về như cũ.'],
+      ['Ngôn ngữ riêng của app bị mờ', 'Cần Android 13 trở lên (máy hiện tại ghi trên mục đó).'],
+      ['Giết tiến trình báo "không giết được"', 'Android không giết app đang ở nền trước hoặc còn dịch vụ đang chạy. Về màn hình chính vài giây rồi thử lại.'],
+      ['Làm đầy bộ nhớ báo lỗi fallocate', 'Một số máy không có lệnh này; mục không tạo gì và đã dọn sạch.']
+    ],
+    tips: ['Mục có biểu tượng cảnh báo "cả máy" tác động lên cả điện thoại nên có hỏi xác nhận trước.', 'Đổi đồng hồ không để lâu: đăng nhập và chứng chỉ HTTPS có thể lỗi khi giờ lệch.'],
+    tour: [
+      { target: tool('stress'), panel: 'stress', title: 'Độ bền', body: 'Đưa máy hoặc app vào tình huống khó rồi xem app xử lý ra sao.' },
+      { target: '.sx-body', panel: 'stress', title: 'Các tình huống', body: 'Chia theo nhóm: tiến trình & bộ nhớ, pin & chờ, màn hình, ngôn ngữ & giờ, kết nối, bộ nhớ trống.' },
+      { target: { text: 'Khôi phục tất cả' }, panel: 'stress', title: 'Trả về như cũ', body: 'Mọi thay đổi đều được ghi nhớ và có thể trả lại bằng một nút, kể cả sau khi tắt ADB Kit.' }
     ]
   },
 
@@ -587,9 +749,9 @@ export const TOPICS: HelpTopic[] = [
     summary: 'Chế độ tối, cỡ chữ, kích thước hiển thị; tự tìm lỗi giao diện',
     when: ['Kiểm tra app với người dùng để chữ to / chế độ tối.', 'Soát nhanh lỗi giao diện trước khi báo cáo.'],
     steps: [
-      'Mở tab Soát UI.',
-      'Cấu hình máy: bấm để đổi ngay. Khi có thay đổi, nút "Khôi phục (N)" hiện ra.',
-      'Mở màn cần kiểm tra trên điện thoại → bấm "Soát". Danh sách vấn đề hiện ra, lỗi nặng chấm đỏ.',
+      'Mở tab Soát UI. Panel có ba tab: "Soát giao diện" (mở sẵn), "Cấu hình máy" và "Vị trí GPS".',
+      'Soát giao diện: mở màn cần kiểm tra trên điện thoại → bấm "Soát". Danh sách vấn đề hiện ra, lỗi nặng chấm đỏ.',
+      'Cấu hình máy: bấm để đổi ngay (chữ to, chế độ tối…). Khi có thay đổi, nút "Khôi phục (N)" hiện ra.',
       'Rê chuột / bấm vào từng mục để khoanh phần tử trên màn hình điện thoại.',
       'Bấm các nhãn phía trên danh sách để lọc theo loại.',
       'Test xong bấm "Khôi phục" để máy về như cũ.'
@@ -618,9 +780,10 @@ export const TOPICS: HelpTopic[] = [
     ],
     tour: [
       { target: tool('check'), panel: 'check', title: 'Soát UI', body: 'Đổi cấu hình máy và tự tìm lỗi giao diện trên màn đang mở.' },
-      { target: '.ck-grid', panel: 'check', title: 'Cấu hình máy', body: 'Bấm để đổi ngay; nút Khôi phục xuất hiện khi có thay đổi.' },
+      { target: { text: 'Soát', within: '.ck-panel .ck-body' }, panel: 'check', title: 'Soát màn hình', body: 'Đọc màn hình đang mở và liệt kê lỗi; rê chuột vào từng mục để khoanh trên điện thoại.' },
       { target: { text: 'Thử chữ to' }, panel: 'check', title: 'Chữ to + soát', body: 'Cách nhanh nhất để thấy giao diện vỡ khi người dùng để chữ to.' },
-      { target: { text: 'Soát', within: '.ck-panel' }, panel: 'check', title: 'Soát màn hình', body: 'Đọc màn hình đang mở và liệt kê lỗi; rê chuột vào từng mục để khoanh trên điện thoại.' }
+      { target: { text: 'Cấu hình máy', within: '.ck-panel .seg' }, panel: 'check', title: 'Cấu hình máy', body: 'Tab này đổi chế độ tối, cỡ chữ, kích thước hiển thị, hiệu ứng; nút Khôi phục xuất hiện khi có thay đổi.' },
+      { target: { text: 'Vị trí GPS', within: '.ck-panel .seg' }, panel: 'check', title: 'Vị trí GPS', body: 'Tab này giả vị trí của điện thoại: đặt một điểm hoặc đi từ A tới B.' }
     ]
   },
 
@@ -665,6 +828,7 @@ export const TOPICS: HelpTopic[] = [
       ['Sửa xong mở app vẫn giá trị cũ', 'App có thể đọc từ server hoặc cache khác; kiểm tra lại khóa đúng file chưa.'],
       ['Muốn sửa database', 'Bản này chỉ xem database (an toàn). Dùng tab Shell với run-as + sqlite3 nếu thật cần.']
     ],
+    tips: ['Muốn lưu cả đăng nhập để quay lại sau, hoặc đổi qua lại giữa nhiều tài khoản: dùng tab "Trạng thái app" (xem mục Lưu & khôi phục trạng thái app).'],
     tour: [{ target: { text: 'Dữ liệu app' }, panel: 'data', title: 'Dữ liệu app', body: 'Chọn app debug để xem prefs, database, MMKV.' }]
   },
   {
@@ -816,6 +980,7 @@ export const SHORTCUTS: [string, string][] = [
   ['Ctrl + V', 'Dán chữ từ máy tính vào điện thoại'],
   ['Alt + bấm', 'Thao tác thật khi đang Soi phần tử / Theo dõi Figma'],
   ['Ctrl + Enter', 'Tạo báo cáo trong hộp thoại Báo lỗi'],
+  ['Alt + 1 / 2 / 3', 'Test tay: chấm Đạt / Lỗi / Xem xét; Alt + ↑ / ↓ đổi testcase'],
   ['Shift + Lưu', 'Lưu kịch bản / bộ test thành file khác'],
   ['← → Enter', 'Lùi / tiếp trong "Chỉ cho tôi"'],
   ['Esc', 'Đóng hộp thoại / hướng dẫn']

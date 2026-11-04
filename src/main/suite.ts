@@ -68,7 +68,8 @@ export async function writeManualResults(s: Suite, outDir: string): Promise<{ pa
   if (!s.kbkt) throw new Error('Bộ test chưa nhập file KBKT')
   const res = s.kbkt.rows
     .filter((r) => r.manual)
-    .map((r) => ({ sheet: r.sheet, row: r.row, results: [r.manual as 'P' | 'F' | 'PE'], note: r.note ?? '' }))
+    // `report` becomes the hyperlink in the KBKT cell, so the evidence is one click away from the result.
+    .map((r) => ({ sheet: r.sheet, row: r.row, results: [r.manual as 'P' | 'F' | 'PE'], note: r.note ?? '', report: r.evidence }))
   mkdirSync(outDir, { recursive: true })
   const out = join(outDir, basename(s.kbkt.file))
   const count = await writeBack(s.kbkt.file, out, res)

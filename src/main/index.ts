@@ -5,12 +5,17 @@ import { adb, adbBinary, adbPath, adbVersion, deviceDetails, installPlatformTool
 
 // ADB Kit's own platform-tools copy (downloaded on demand) lives in the user data folder.
 setOwnToolsDir(app.getPath('userData'))
+setStateRoot(join(app.getPath('userData'), 'appstates'))
 import { ScrcpySession } from './scrcpy'
 import { CrashWatcher, Runner, setBaselinesRoot, type Crash } from './runner'
 import { parseCli, runCli } from './cli'
 import { dumpUi } from './ui'
 import { SuiteRunner, readScript, readSuite, templateFor, writeManualResults, writeSuite } from './suite'
 import { ReqDocStore, exportCases, fillValue, scanScreen } from './reqdoc'
+import { setStateRoot, stateStore } from './appstate'
+import { Stress, StressStore } from './stress'
+import { captureEvidence, kbktFolder } from './manual'
+import type { EvidenceInput } from '../shared/manual'
 import { kbktNameOf, type ReqCase } from '../shared/reqdoc'
 import { readKbkt } from './kbkt'
 import { WebViewInspector } from './webview'
@@ -130,6 +135,8 @@ let runner: Runner | null = null
 let suiteRunner: SuiteRunner | null = null
 const reportsRoot = (): string => join(app.getPath('documents'), 'ADB Kit', 'reports')
 const testsDir = (): string => join(app.getPath('documents'), 'ADB Kit', 'tests')
+/** Evidence of manual test results (one folder per KBKT file, then per test case). */
+const testTayRoot = (): string => join(app.getPath('documents'), 'ADB Kit', 'test-tay')
 /** Bundled KBKT templates (BES, BCCS). */
 const templatesDir = app.isPackaged ? join(process.resourcesPath, 'resources', 'templates') : join(app.getAppPath(), 'resources', 'templates')
 
@@ -206,8 +213,10 @@ function registerSuiteIpc(): void {
     return r.filePaths[0]
   })
   ipcMain.handle('kbkt:write-manual', async (_e, suite: Suite) => {
+    if (!suite.kbkt) throw new Error('Bộ test chưa nhập file KBKT')
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    return writeManualResults(suite, join(reportsRoot(), `${stamp}_KBKT-TEST-TAY`))
+    // Next to the evidence folders, so the links inside the KBKT stay short and the folder can be zipped and shared.
+    return writeManualResults(suite, join(testTayRoot(), kbktFolder(suite.kbkt.file), 'ket-qua', stamp))
   })
   ipcMain.handle('auto:load', (_e, path: string) => readScript(path))
   ipcMain.handle('suite:open', async () => {
@@ -571,6 +580,53 @@ function registerJiraIpc(): void {
   })
 }
 
+/** Test-bench tools: manual KBKT testing with evidence, saved app states, and durability ("độ bền") tests. */
+function registerToolsIpc(): void {
+  const states = stateStore()
+  const stress = new Stress(new StressStore(join(app.getPath('userData'), 'stress-state.json')))
+  const modelOf = async (serial: string): Promise<string> => (await listDevices()).find((d) => d.serial === serial)?.model ?? serial
+
+  // Manual testing with evidence
+  ipcMain.handle('manual:capture', (_e, serial: string, input: EvidenceInput) => captureEvidence(serial, testTayRoot(), input))
+  ipcMain.handle('manual:open-root', async () => {
+    mkdirSync(testTayRoot(), { recursive: true })
+    return eShell.openPath(testTayRoot())
+  })
+  ipcMain.handle('manual:reveal', (_e, path: string) => {
+    if (path) eShell.showItemInFolder(path)
+  })
+
+  // Saved app states (login, settings, local data)
+  ipcMain.handle('state:list', (_e, pkg?: string) => states.list(pkg))
+  ipcMain.handle('state:save', async (_e, serial: string, pkg: string, name: string, note: string) => states.save(serial, pkg, name, note, await modelOf(serial)))
+  ipcMain.handle('state:restore', (_e, serial: string, id: string, launch?: boolean) => states.restore(serial, id, { launch }))
+  ipcMain.handle('state:rename', (_e, id: string, name: string, note?: string) => states.rename(id, name, note))
+  ipcMain.handle('state:remove', (_e, id: string) => states.remove(id))
+  ipcMain.handle('state:export', async (_e, id: string) => {
+    const meta = states.list().find((m) => m.id === id)
+    if (!meta) throw new Error('Không tìm thấy trạng thái')
+    const r = await dialog.showSaveDialog(win!, {
+      title: 'Xuất trạng thái app',
+      defaultPath: join(app.getPath('documents'), `${meta.name.replace(/[\\/:*?"<>|]+/g, '_')}.adbstate`),
+      filters: [{ name: 'Trạng thái app ADB Kit', extensions: ['adbstate'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    await states.exportTo(id, r.filePath)
+    return r.filePath
+  })
+  ipcMain.handle('state:import', async () => {
+    const r = await dialog.showOpenDialog(win!, { title: 'Nhập trạng thái app', filters: [{ name: 'Trạng thái app ADB Kit', extensions: ['adbstate'] }], properties: ['openFile'] })
+    if (r.canceled || !r.filePaths[0]) return null
+    return states.importFrom(r.filePaths[0])
+  })
+  ipcMain.handle('state:usage', () => states.usage())
+
+  // Durability tests
+  ipcMain.handle('stress:status', (_e, serial: string) => stress.status(serial))
+  ipcMain.handle('stress:apply', (_e, serial: string, id: string, value: string, pkg?: string) => stress.apply(serial, id, value, pkg))
+  ipcMain.handle('stress:restore', (_e, serial: string, id?: string, pkg?: string) => stress.restore(serial, id, pkg))
+}
+
 function registerBugIpc(): void {
   registerDevConfIpc()
   registerJiraIpc()
@@ -578,6 +634,7 @@ function registerBugIpc(): void {
   registerDataIpc()
   registerRecordIpc()
   registerReqDocIpc()
+  registerToolsIpc()
   ipcMain.handle('bug:snap', (_e, serial: string) => snapBug(serial, reportsRoot()))
   ipcMain.handle('bug:save', (_e, id: string, input: BugInput) => saveBug(id, input))
   ipcMain.handle('bug:discard', (_e, id: string) => discardBug(id))

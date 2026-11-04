@@ -324,7 +324,6 @@ export function FigmaPanel({ serial }: { serial: string }) {
   if (hasToken === false)
     return (
       <div className="panel wide fg-panel">
-        <div className="panel-head"><span className="panel-title">So với Figma</span></div>
         <div className="fg-setup">
           <KeyRound size={28} className="muted-ic" />
           <b>Cần Figma Personal Access Token</b>
@@ -360,7 +359,6 @@ export function FigmaPanel({ serial }: { serial: string }) {
     <div className="panel wide fg-panel">
       {/* source */}
       <div className="panel-head fg-head">
-        <span className="panel-title">So với Figma</span>
         <div className="fg-url">
           <Link2 size={13} />
           <input

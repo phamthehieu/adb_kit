@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
+  SlidersHorizontal,
   Circle,
   CircleCheck,
   CircleX,
@@ -24,6 +26,7 @@ import { autoStore } from '../lib/automation'
 import { MultiRunBox } from './MultiRunBox'
 import { FreshOptions } from './FreshOptions'
 import { destructiveSteps, emptySuite, freshRisk, kbktKey, suiteFresh, type KbktImport, type KbktLink, type CaseInfo, type CaseState, type RunOptions, type ScriptInfo, type Suite, type SuiteEvent } from '@shared/automation'
+import { ask, tell } from '../lib/dialog'
 
 interface Props {
   serial: string
@@ -127,7 +130,15 @@ function KbktSection(props: {
         <button className="iconbtn" disabled={running} onClick={importFile} title="Đọc lại file (giữ các liên kết / kết quả đã đánh)">
           Nhập lại
         </button>
-        <button className="iconbtn ghost danger" disabled={running} onClick={() => confirm('Bỏ file KBKT khỏi bộ test?') && onChange(undefined)}>
+        <button
+          className="iconbtn ghost danger"
+          disabled={running}
+          title="Bỏ file KBKT khỏi bộ test"
+          aria-label="Bỏ file KBKT khỏi bộ test"
+          onClick={async () => {
+            if (await ask('Bỏ file KBKT khỏi bộ test?\n\nFile Excel gốc không bị xóa.', { danger: true, ok: 'Bỏ khỏi bộ test' })) onChange(undefined)
+          }}
+        >
           <X size={12} />
         </button>
       </div>
@@ -291,6 +302,7 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
   /** Something to run: an enabled script, or an imported KBKT row with a script. */
   const canRun = suite.items.some((i) => i.enabled) || !!suite.kbkt?.rows.some((r) => r.script)
   const [multi, setMulti] = useState(false)
+  const [metaOpen, setMetaOpen] = useState(() => localStorage.getItem('suiteMetaOpen') === '1')
 
   const run = async (): Promise<void> => {
     if (!canRun) return
@@ -309,7 +321,7 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
     }
     const freshWarn = apps.size ? freshRisk(suite.fresh, suite.freshPerms) : null
     if (freshWarn) risky.unshift(`Mỗi testcase: ${freshWarn} (${[...apps].join(', ')})`)
-    if (risky.length && !confirm(`Bộ test có ${risky.length} bước sẽ THAY ĐỔI dữ liệu / thiết lập trên điện thoại:\n\n${risky.slice(0, 15).join('\n')}${risky.length > 15 ? '\n…' : ''}\n\nVẫn chạy?`)) return
+    if (risky.length && !(await ask(`Bộ test có ${risky.length} bước sẽ THAY ĐỔI dữ liệu / thiết lập trên điện thoại:\n\n${risky.slice(0, 15).join('\n')}${risky.length > 15 ? '\n…' : ''}`, { title: 'Chạy bộ test', danger: true, ok: 'Vẫn chạy' }))) return
     autoStore.set({ running: true, unlocked: false, recording: false, inspecting: false, highlight: null })
     setRunning(true)
     setResult(null)
@@ -346,8 +358,8 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
       setResult({ html: '', dir: '', passed: 0, failed: 0, total: 0, error: (e as Error).message })
     }
   }
-  const newSuite = (): void => {
-    if (suite.items.length && dirty && !confirm('Bỏ bộ test hiện tại (chưa lưu)?')) return
+  const newSuite = async (): Promise<void> => {
+    if (suite.items.length && dirty && !(await ask('Bỏ bộ test hiện tại?\n\nCác thay đổi chưa lưu sẽ mất.', { danger: true, ok: 'Bỏ và tạo mới' }))) return
     setSuite(() => ({ ...emptySuite(), author: suite.author, tester: suite.tester }))
     setPath(null)
     localStorage.removeItem('autoSuitePath')
@@ -372,14 +384,42 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
     </label>
   )
 
+  const tpl = !suite.template || suite.template === 'BES' ? 'BES' : suite.template === 'BCCS' ? 'BCCS' : 'mẫu riêng'
+  const enabledCount = suite.items.filter((i) => i.enabled).length
+  const summary = [
+    suite.code && `mã ${suite.code}`,
+    `mẫu ${tpl}`,
+    suite.retries ? `chạy lại ${suite.retries} lần khi lỗi` : 'không chạy lại',
+    suite.author || suite.tester ? [suite.author && `lập: ${suite.author}`, suite.tester && `test: ${suite.tester}`].filter(Boolean).join(', ') : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <>
-      <div className="auto-row suite-meta">
-        {field('Tên bộ test (D2)', suite.name, (v) => setSuite((s) => ({ ...s, name: v })))}
-        {field('Mã TC (D3)', suite.code, (v) => setSuite((s) => ({ ...s, code: v.replace(/\s+/g, '_') })), 150, 'VD: MYENG_HOMNAY')}
+      <div className="auto-row suite-name">
+        <label className="sfield grow" title="Ghi vào ô D2 của file KBKT và tiêu đề báo cáo">
+          <span>Tên bộ test</span>
+          <input className="input" value={suite.name} disabled={running} onChange={(e) => setSuite((s) => ({ ...s, name: e.target.value }))} />
+        </label>
+        <button
+          className={`iconbtn ${metaOpen ? 'on' : ''}`}
+          aria-expanded={metaOpen}
+          onClick={() => {
+            localStorage.setItem('suiteMetaOpen', metaOpen ? '0' : '1')
+            setMetaOpen(!metaOpen)
+          }}
+          title="Mã testcase, người lập, người test, chạy lại khi lỗi, mẫu KBKT, trạng thái app trước khi chạy"
+        >
+          <SlidersHorizontal size={14} /> <span>Chi tiết bộ test</span> <ChevronDown size={13} className={`chev ${metaOpen ? 'up' : ''}`} />
+        </button>
+      </div>
+      {!metaOpen && <div className="opt-sum" title="Mở “Chi tiết bộ test” để đổi">{summary}</div>}
+      <div className={`auto-row suite-meta ${metaOpen ? '' : 'hidden'}`}>
+        {field('Mã testcase (tiền tố)', suite.code, (v) => setSuite((s) => ({ ...s, code: v.replace(/\s+/g, '_') })), 170, 'VD: MYENG_HOMNAY')}
         {field('Người lập', suite.author, (v) => setSuite((s) => ({ ...s, author: v })), 130)}
         {field('Người test', suite.tester, (v) => setSuite((s) => ({ ...s, tester: v })), 130)}
-        <label className="sfield" style={{ flex: '0 0 130px' }} title="Test lỗi sẽ được chạy lại; kết quả ghi vào KQ lần 2 / lần 3">
+        <label className="sfield" style={{ flex: '0 0 150px' }} title="Test lỗi sẽ được chạy lại; kết quả ghi vào KQ lần 2 / lần 3">
           <span>Chạy lại khi lỗi</span>
           <select className="input sm" value={suite.retries} disabled={running} onChange={(e) => setSuite((s) => ({ ...s, retries: +e.target.value }))}>
             <option value={0}>không</option>
@@ -400,7 +440,7 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
                 const p = await window.api.suite.pickTemplate()
                 if (p) setSuite((s) => ({ ...s, template: p }))
               } catch (err) {
-                alert((err as Error).message)
+                void tell((err as Error).message)
               }
             }}
           >
@@ -410,7 +450,7 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
           </select>
         </label>
       </div>
-      <div className="auto-row opts">
+      <div className={`auto-row opts ${metaOpen ? '' : 'hidden'}`}>
         <FreshOptions
           fresh={suiteFresh(suite)}
           perms={suite.freshPerms ?? 'keep'}
@@ -434,7 +474,7 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
         <button className={`iconbtn ${multi ? 'on' : ''}`} disabled={running || !canRun} onClick={() => setMulti(!multi)} title="Chạy bộ test này trên nhiều điện thoại cùng lúc">
           <Smartphone size={12} /> Nhiều máy…
         </button>
-        <button className="iconbtn" disabled={running} onClick={() => void window.api.suite.pickScripts().then(addPaths)}>
+        <button className={`iconbtn ${suite.items.length === 0 ? 'primary' : ''}`} disabled={running} onClick={() => void window.api.suite.pickScripts().then(addPaths)}>
           <Plus size={12} /> Thêm kịch bản…
         </button>
         {currentScriptPath && (
@@ -449,20 +489,37 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
         )}
         <span className="spacer" />
         {dirty && <span className="muted-ic" title="có thay đổi chưa lưu">●</span>}
-        <button className="iconbtn" title="Bộ test mới" disabled={running} onClick={newSuite}><FilePlus2 size={13} /></button>
-        <button className="iconbtn" title="Mở bộ test" disabled={running} onClick={open}><FolderOpen size={13} /></button>
-        <button className="iconbtn" title="Lưu bộ test (Shift+click: lưu thành file khác)" onClick={(e) => void save(e.shiftKey || !path)}><Save size={13} /></button>
+        <button className="iconbtn" title="Bộ test mới" disabled={running} onClick={newSuite}><FilePlus2 size={14} /> <span className="btn-t">Mới</span></button>
+        <button className="iconbtn" title="Mở bộ test" disabled={running} onClick={open}><FolderOpen size={14} /> <span className="btn-t">Mở</span></button>
+        <button className="iconbtn" title="Lưu bộ test (Shift+click: lưu thành file khác)" onClick={(e) => void save(e.shiftKey || !path)}><Save size={14} /> <span className="btn-t">Lưu</span></button>
       </div>
 
       {multi && <MultiRunBox suite={suite} opts={opts} canRun={canRun} busy={running} onClose={() => setMulti(false)} />}
 
+      {suite.items.length > 0 && (
+        <div className="steps-head">
+          <b>{suite.items.length} kịch bản</b>
+          <span className="muted">
+            {enabledCount === suite.items.length ? 'đang bật tất cả' : `${enabledCount} đang bật`} · mỗi kịch bản là một testcase
+          </span>
+        </div>
+      )}
       <div className="steps">
         {suite.items.length === 0 && (
-          <div className="steps-empty">
-            Bộ test gồm nhiều kịch bản — mỗi kịch bản là một testcase (một dòng trong file KBKT).
-            <br />
-            Bấm <b>Thêm kịch bản…</b> để chọn các file <code>.json</code> đã lưu, đặt <b>nhóm</b> (dòng vàng trong KBKT), gắn file <b>CSV</b> nếu muốn chạy
-            cùng kịch bản với nhiều bộ dữ liệu (dùng <code>{'${tên_cột}'}</code> trong các bước), rồi bấm <b>Chạy bộ test</b>.
+          <div className="steps-empty start">
+            <div className="start-title">Bộ test gồm nhiều kịch bản</div>
+            <ol className="start-steps">
+              <li>
+                <b>Thêm kịch bản</b> — chọn các file <code>.json</code> bạn đã lưu ở tab Kịch bản. Mỗi kịch bản là một testcase (một dòng KBKT).
+              </li>
+              <li>
+                <b>Đặt nhóm</b> cho từng kịch bản (dòng vàng trong KBKT) và gắn file <b>CSV</b> nếu muốn chạy cùng kịch bản với nhiều bộ dữ liệu (dùng <code>{'${tên_cột}'}</code> trong các bước).
+              </li>
+              <li>
+                Bấm <b>Chạy bộ test</b>: ADB Kit chạy lần lượt, thử lại khi lỗi và xuất báo cáo kèm file KBKT.
+              </li>
+            </ol>
+            <div className="start-foot">Đã có sẵn testcase trong file Excel KBKT? Nhập ở khung bên dưới, hoặc dùng tab <b>Test tay</b> để chấm từng dòng kèm bằng chứng.</div>
           </div>
         )}
         {suite.items.map((it, i) => {
@@ -474,15 +531,14 @@ export function SuitePanel({ serial, opts, currentScriptPath, onEditScript }: Pr
               <input type="checkbox" checked={it.enabled} disabled={running} onChange={(e) => updateItem(i, { enabled: e.target.checked })} title="Bật / tắt" />
               <div className="body">
                 <div className="d">
-                  <b>{info?.name ?? fileName(it.path)}</b>{' '}
-                  <span className="muted">
-                    {info?.error ? <span className="bad">{info.error}</span> : `${info?.steps ?? '?'} bước · ${fileName(it.path)}`}
-                  </span>
+                  <b title={it.path}>{info?.name ?? fileName(it.path)}</b>{' '}
+                  <span className="muted">{info?.error ? <span className="bad">{info.error}</span> : info?.steps !== undefined ? `· ${info.steps} bước` : ''}</span>
                 </div>
                 <div className="f">
                   <input
                     className="input sm grow"
-                    placeholder="Nhóm (dòng vàng trong KBKT) — VD: Giao diện, Chức năng…"
+                    placeholder="Nhóm trong KBKT (tùy chọn) — VD: Đăng nhập, Thanh toán"
+                    aria-label="Nhóm trong KBKT"
                     value={it.group ?? ''}
                     disabled={running}
                     onChange={(e) => updateItem(i, { group: e.target.value })}

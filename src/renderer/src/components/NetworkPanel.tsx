@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eraser, ListPlus, Pause, Play, RotateCcw, WifiOff, X } from 'lucide-react'
+import { ChevronDown, Eraser, FlaskConical, ListPlus, Pause, Play, RotateCcw, WifiOff, X } from 'lucide-react'
 import { NET_PROFILES, callFailed, describeMock, emptyScript, type MockRule, type NetCall, type NetProfile, type Script, type Step } from '@shared/automation'
 import { PackagePicker } from './PackagePicker'
 import { PaneHandle } from './PaneHandle'
+import { ask } from '../lib/dialog'
 
 type Kind = 'all' | 'http' | 'ipc'
 
@@ -73,6 +74,7 @@ export function NetworkPanel({ serial }: { serial: string }) {
   const [paused, setPaused] = useState(false)
   const [kind, setKind] = useState<Kind>('all')
   const [onlyErrors, setOnlyErrors] = useState(false)
+  const [simOpen, setSimOpen] = useState(() => localStorage.getItem('netSimOpen') === '1')
   const [query, setQuery] = useState('')
   const [sel, setSel] = useState<string | null>(null)
   const [info, setInfo] = useState<string[]>([])
@@ -140,10 +142,10 @@ export function NetworkPanel({ serial }: { serial: string }) {
     // Longer paths first so /api/user/orders isn't answered by the /api/user rule.
     return [...byPath.values()].sort((a, b) => b.match.length - a.match.length)
   }
-  const replayAll = (): void => {
+  const replayAll = async (): Promise<void> => {
     const rules = replayRules([...calls.values()])
     if (!rules.length) return setInfo((l) => [...l.slice(-4), 'Chưa có API nào ghi được đầy đủ để phát lại (cần HTTP có phản hồi, không phải app native/Chucker)'])
-    if (!confirm(`Phát lại ${rules.length} API với đúng phản hồi đã ghi?\n\nTừ giờ app nhận các phản hồi này thay vì gọi server (tự hết sau 15 phút, hoặc bấm "Bỏ hết").`)) return
+    if (!(await ask(`Phát lại ${rules.length} API với đúng phản hồi đã ghi?\n\nTừ giờ app nhận các phản hồi này thay vì gọi server (tự hết sau 15 phút, hoặc bấm "Bỏ hết").`, { ok: 'Phát lại' }))) return
     void setMocks([...mocks.filter((m) => !rules.some((r) => r.match === m.match)), ...rules])
   }
   const saveSet = async (): Promise<void> => {
@@ -229,7 +231,7 @@ export function NetworkPanel({ serial }: { serial: string }) {
         {running ? (
           <button className="iconbtn" onClick={stop} title="Ngừng theo dõi"><X size={13} /> Ngừng</button>
         ) : (
-          <button className="iconbtn" disabled={!pkg} onClick={() => { setRunning(true); void window.api.net.start(serial, pkg) }}>
+          <button className="iconbtn primary" disabled={!pkg} onClick={() => { setRunning(true); void window.api.net.start(serial, pkg) }}>
             <Play size={13} /> Theo dõi
           </button>
         )}
@@ -241,7 +243,7 @@ export function NetworkPanel({ serial }: { serial: string }) {
         >
           <RotateCcw size={13} /> Tải lại app
         </button>
-        <select className="input" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+        <select className="input kind-sel" value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Loại lời gọi">
           <option value="all">Tất cả</option>
           <option value="http">HTTP</option>
           <option value="ipc">Lệnh (Tauri / bridge miniapp)</option>
@@ -250,51 +252,81 @@ export function NetworkPanel({ serial }: { serial: string }) {
         <button className={`iconbtn ${onlyErrors ? 'on' : ''}`} onClick={() => setOnlyErrors(!onlyErrors)} title="Chỉ hiện lỗi">
           Lỗi{errCount ? ` (${errCount})` : ''}
         </button>
-        <button className={`iconbtn ${paused ? 'on' : ''}`} onClick={() => setPaused(!paused)}>
+        <button className={`iconbtn ${paused ? 'on' : ''}`} onClick={() => setPaused(!paused)} title={paused ? 'Tiếp tục cập nhật danh sách' : 'Tạm dừng cập nhật danh sách'} aria-pressed={paused}>
           {paused ? <Play size={13} /> : <Pause size={13} />}
         </button>
         <button className="iconbtn" title="Xóa danh sách" onClick={() => { setCalls(new Map()); setSel(null) }}><Eraser size={14} /></button>
       </div>
-      <div className="log-tools net-sim">
-        <span className="muted">Giả lập mạng cho app:</span>
-        <select
-          className={`input ${profile ? 'net-on' : ''}`}
-          value={profile}
-          disabled={!running}
-          onChange={(e) => void setProfile(e.target.value as NetProfile['mode'] | '')}
-          title="Áp cho mọi API của app đang theo dõi: fetch/XHR của WebView, API miniapp qua bridge (WVFetch), HTTP của Tauri. App native chỉ có Chucker thì không áp được — dùng Ngắt mạng thật."
-        >
-          <option value="">Bình thường</option>
-          {(Object.keys(NET_PROFILES) as NetProfile['mode'][]).map((k) => (
-            <option key={k} value={k}>{NET_PROFILES[k].label}</option>
-          ))}
-        </select>
-        <span className="muted">Ghi &amp; phát lại:</span>
-        <button className="iconbtn" disabled={!running || !replayable} onClick={replayAll} title="Cho app nhận lại đúng các phản hồi API vừa ghi (không phụ thuộc server)">
-          Phát lại {replayable || ''}
-        </button>
-        <button className="iconbtn" disabled={!replayable && !mocks.length} onClick={() => void saveSet()} title="Lưu các phản hồi đã ghi (hoặc các giả lập đang bật) ra file .mock.json">
-          Lưu bộ…
-        </button>
-        <button className="iconbtn" disabled={!running} onClick={() => void openSet()} title="Mở bộ API đã lưu và phát lại">
-          Mở bộ…
-        </button>
-        <span className="spacer" />
-        <span className="muted">Mất mạng thật cả máy:</span>
-        <select className="input" value={cutSec} onChange={(e) => setCutSec(Number(e.target.value))} disabled={cutLeft > 0}>
-          {[5, 10, 30, 60].map((s) => (
-            <option key={s} value={s}>{s} giây</option>
-          ))}
-        </select>
+      <div className="log-tools net-sim-bar">
         <button
-          className={`iconbtn ${cutLeft ? 'on' : ''}`}
-          disabled={cutLeft > 0}
-          onClick={() => void cut()}
-          title="Tắt Wi-Fi và dữ liệu di động của điện thoại rồi tự bật lại — áp cho mọi app, kể cả app native. Chỉ dùng khi cắm cáp USB."
+          className={`iconbtn ${simOpen ? 'on' : ''}`}
+          aria-expanded={simOpen}
+          onClick={() => {
+            localStorage.setItem('netSimOpen', simOpen ? '0' : '1')
+            setSimOpen(!simOpen)
+          }}
+          title="Giả lập mạng chậm / lỗi, ghi và phát lại phản hồi API, ngắt mạng cả máy"
         >
-          <WifiOff size={13} /> {cutLeft ? `Đang mất mạng… ${cutLeft}s` : 'Ngắt mạng'}
+          <FlaskConical size={14} /> Giả lập &amp; phát lại <ChevronDown size={13} className={`chev ${simOpen ? 'up' : ''}`} />
         </button>
+        {profile && <span className="mini-tag bad">Đang giả lập: {NET_PROFILES[profile].label}</span>}
+        {cutLeft > 0 && <span className="mini-tag bad">Đang mất mạng… {cutLeft}s</span>}
+        {!simOpen && !profile && !cutLeft && <span className="muted">Mạng bình thường</span>}
       </div>
+      {simOpen && (
+        <div className="net-sim-box">
+          <div className="sim-group">
+            <div className="opt-cap">Giả lập mạng cho app</div>
+            <select
+              className={`input ${profile ? 'net-on' : ''}`}
+              value={profile}
+              disabled={!running}
+              aria-label="Giả lập mạng cho app"
+              onChange={(e) => void setProfile(e.target.value as NetProfile['mode'] | '')}
+            >
+              <option value="">Bình thường</option>
+              {(Object.keys(NET_PROFILES) as NetProfile['mode'][]).map((k) => (
+                <option key={k} value={k}>{NET_PROFILES[k].label}</option>
+              ))}
+            </select>
+            <div className="sim-hint">Áp cho mọi API của app đang theo dõi (WebView, miniapp qua bridge, Tauri). App native chỉ có Chucker thì không áp được — dùng “Ngắt mạng thật”.</div>
+          </div>
+          <div className="sim-group">
+            <div className="opt-cap">Ghi &amp; phát lại</div>
+            <div className="sim-row">
+              <button className="iconbtn" disabled={!running || !replayable} onClick={replayAll} title="Cho app nhận lại đúng các phản hồi API vừa ghi (không phụ thuộc server)">
+                Phát lại {replayable || ''}
+              </button>
+              <button className="iconbtn" disabled={!replayable && !mocks.length} onClick={() => void saveSet()} title="Lưu các phản hồi đã ghi (hoặc các giả lập đang bật) ra file .mock.json">
+                Lưu bộ…
+              </button>
+              <button className="iconbtn" disabled={!running} onClick={() => void openSet()} title="Mở bộ API đã lưu và phát lại">
+                Mở bộ…
+              </button>
+            </div>
+            <div className="sim-hint">Cho app nhận lại đúng các phản hồi vừa ghi, không phụ thuộc server.</div>
+          </div>
+          <div className="sim-group danger">
+            <div className="opt-cap">Ngắt mạng thật cả máy</div>
+            <div className="sim-row">
+              <select className="input" value={cutSec} onChange={(e) => setCutSec(Number(e.target.value))} disabled={cutLeft > 0} aria-label="Thời gian ngắt mạng">
+                {[5, 10, 30, 60].map((s) => (
+                  <option key={s} value={s}>{s} giây</option>
+                ))}
+              </select>
+              <button
+                className={`iconbtn ${cutLeft ? 'on' : 'danger-outline'}`}
+                disabled={cutLeft > 0}
+                onClick={() => void cut()}
+                title="Tắt Wi-Fi và dữ liệu di động của điện thoại rồi tự bật lại — áp cho mọi app, kể cả app native. Chỉ dùng khi cắm cáp USB."
+              >
+                <WifiOff size={14} /> {cutLeft ? `Đang mất mạng… ${cutLeft}s` : 'Ngắt mạng'}
+              </button>
+            </div>
+            <div className="sim-hint">Tắt Wi-Fi và 4G của <b>cả điện thoại</b> rồi tự bật lại — áp cho mọi app. Chỉ dùng khi cắm cáp USB.</div>
+          </div>
+        </div>
+      )}
       <div className="log-meta">
         <span>{list.length} / {calls.size} lời gọi</span>
         {info.slice(-1).map((m, i) => (

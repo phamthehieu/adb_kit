@@ -1,0 +1,148 @@
+import {
+  Camera,
+  CircleCheck,
+  Clock,
+  CornerDownLeft,
+  Eraser,
+  FileJson,
+  FlaskConical,
+  Gauge,
+  Hand,
+  Hourglass,
+  Keyboard,
+  Link2,
+  MessageSquareText,
+  MousePointerClick,
+  Move,
+  Network,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  ScanEye,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  Square,
+  SquareTerminal,
+  ChevronsUpDown,
+  WifiOff,
+  type LucideIcon
+} from 'lucide-react'
+import type { Step } from '@shared/automation'
+
+/** Steps are grouped by what they do, so the list reads at a glance and the "add step" menu is not one long list. */
+export type StepCat = 'act' | 'check' | 'env' | 'mock'
+
+export const CAT_INFO: Record<StepCat, { title: string; hint: string }> = {
+  act: { title: 'Thao tác trên màn hình', hint: 'Chạm, vuốt, gõ chữ, bấm phím' },
+  check: { title: 'Chờ & kiểm tra', hint: 'Đợi, kiểm tra kết quả, chụp ảnh, đo hiệu năng' },
+  env: { title: 'App & môi trường', hint: 'Mở / tắt app, quyền, mạng, OTP, lệnh shell' },
+  mock: { title: 'Giả lập & API', hint: 'Làm server lỗi, chậm, phát lại phản hồi đã ghi' }
+}
+export const CAT_ORDER: StepCat[] = ['act', 'check', 'env', 'mock']
+
+const CAT: Record<Step['type'], StepCat> = {
+  tap: 'act',
+  longpress: 'act',
+  swipe: 'act',
+  scroll: 'act',
+  text: 'act',
+  key: 'act',
+  wait: 'check',
+  waitFor: 'check',
+  assert: 'check',
+  tapIf: 'check',
+  api: 'check',
+  perf: 'check',
+  visual: 'check',
+  permCheck: 'check',
+  screenshot: 'check',
+  launch: 'env',
+  stopApp: 'env',
+  appState: 'env',
+  network: 'env',
+  permission: 'env',
+  permRevokeAll: 'env',
+  appop: 'env',
+  deeplink: 'env',
+  otp: 'env',
+  shell: 'env',
+  mock: 'mock',
+  mockClear: 'mock',
+  mockFile: 'mock',
+  reloadWebView: 'mock'
+}
+
+const ICON: Record<Step['type'], LucideIcon> = {
+  tap: MousePointerClick,
+  longpress: Hand,
+  swipe: Move,
+  scroll: ChevronsUpDown,
+  text: Keyboard,
+  key: CornerDownLeft,
+  wait: Clock,
+  waitFor: Hourglass,
+  assert: CircleCheck,
+  tapIf: MousePointerClick,
+  api: Network,
+  perf: Gauge,
+  visual: ScanEye,
+  permCheck: ShieldCheck,
+  screenshot: Camera,
+  launch: Play,
+  stopApp: Square,
+  appState: RotateCcw,
+  network: WifiOff,
+  permission: ShieldCheck,
+  permRevokeAll: ShieldOff,
+  appop: Shield,
+  deeplink: Link2,
+  otp: MessageSquareText,
+  shell: SquareTerminal,
+  mock: FlaskConical,
+  mockClear: Eraser,
+  mockFile: FileJson,
+  reloadWebView: RefreshCw
+}
+
+export const stepCat = (s: Step): StepCat => CAT[s.type] ?? 'env'
+export const stepIcon = (s: Step): LucideIcon => ICON[s.type] ?? SquareTerminal
+
+/** Menu entries for "+ Thêm bước": short name, one-line hint, group. Keys match ADDABLE in AutomationPanel. */
+export const ADD_META: Record<string, { cat: StepCat; label: string; hint: string; popular?: boolean }> = {
+  waitFor: { cat: 'check', label: 'Chờ chữ xuất hiện', hint: 'Đợi tới khi một chữ hiện ra trên màn hình', popular: true },
+  assert: { cat: 'check', label: 'Kiểm tra chữ có hiển thị', hint: 'Đạt nếu thấy (hoặc không thấy) chữ đó', popular: true },
+  tapIf: { cat: 'check', label: 'Nếu thấy chữ thì bấm', hint: 'Cho popup lúc có lúc không', popular: true },
+  wait: { cat: 'check', label: 'Chờ một lúc', hint: 'Đợi cố định vài giây' },
+  screenshot: { cat: 'check', label: 'Chụp màn hình', hint: 'Thêm ảnh vào báo cáo', popular: true },
+  visual: { cat: 'check', label: 'So sánh với ảnh chuẩn', hint: 'Báo lỗi nếu giao diện khác ảnh chuẩn' },
+  api: { cat: 'check', label: 'Kiểm tra API được gọi', hint: 'Đạt nếu app gọi đúng API (đúng mã trả về)' },
+  apiAbsent: { cat: 'check', label: 'Kiểm tra KHÔNG gọi API', hint: 'Đạt nếu app không gọi API đó' },
+  perfStartup: { cat: 'check', label: 'Thời gian mở app ≤ …', hint: 'Báo lỗi nếu mở app chậm hơn ngưỡng' },
+  perfMemory: { cat: 'check', label: 'RAM ≤ …', hint: 'Báo lỗi nếu app dùng quá nhiều RAM' },
+  perfCpu: { cat: 'check', label: 'CPU trung bình ≤ …', hint: 'Báo lỗi nếu CPU cao' },
+  perfJank: { cat: 'check', label: 'Khung hình giật ≤ …', hint: 'Báo lỗi nếu giao diện giật' },
+  permCheck: { cat: 'check', label: 'Kiểm tra quyền đang cấp / từ chối', hint: 'Đạt nếu quyền ở đúng trạng thái' },
+  text: { cat: 'act', label: 'Nhập chữ', hint: 'Gõ chữ vào ô đang chọn' },
+  enter: { cat: 'act', label: 'Phím Enter', hint: 'Xác nhận / xuống dòng' },
+  back: { cat: 'act', label: 'Phím Back', hint: 'Quay lại màn hình trước' },
+  home: { cat: 'act', label: 'Phím Home', hint: 'Về màn hình chính của máy' },
+  recents: { cat: 'act', label: 'Phím Đa nhiệm', hint: 'Mở danh sách app gần đây' },
+  launch: { cat: 'env', label: 'Mở app', hint: 'Khởi động app (có thể xóa dữ liệu trước)', popular: true },
+  stopApp: { cat: 'env', label: 'Tắt hẳn app', hint: 'Dừng app để mở lại từ đầu' },
+  appState: { cat: 'env', label: 'Khôi phục trạng thái app', hint: 'Đưa dữ liệu về một bản đã lưu (đăng nhập sẵn)', popular: true },
+  otp: { cat: 'env', label: 'Chờ mã OTP rồi điền', hint: 'Lấy mã mới từ thông báo và gõ vào ô đang chọn', popular: true },
+  deeplink: { cat: 'env', label: 'Mở deep link / URL', hint: 'Vào thẳng một màn hình bằng link' },
+  wifiOff: { cat: 'env', label: 'Tắt Wi-Fi + 4G', hint: 'Test khi mất mạng' },
+  wifiOn: { cat: 'env', label: 'Bật lại Wi-Fi + 4G', hint: 'Trả mạng về bình thường' },
+  permission: { cat: 'env', label: 'Cấp quyền cho app', hint: 'Cấp / thu hồi một quyền cụ thể' },
+  permRevokeAll: { cat: 'env', label: 'Thu hồi mọi quyền', hint: 'App như mới cài, sẽ xin quyền lại' },
+  appop: { cat: 'env', label: 'Đặt quyền đặc biệt', hint: 'Hiển thị trên app khác, báo thức chính xác…' },
+  shell: { cat: 'env', label: 'Lệnh adb shell', hint: 'Chạy lệnh tùy ý trên điện thoại' },
+  mockError: { cat: 'mock', label: 'API / lệnh bị lỗi', hint: 'Giả lập mất mạng cho các API khớp' },
+  mockStatus: { cat: 'mock', label: 'API trả về mã lỗi (vd. 500)', hint: 'Giả lập server trả lỗi' },
+  mockDelay: { cat: 'mock', label: 'API / lệnh chậm', hint: 'Giả lập server trả lời chậm' },
+  mockFile: { cat: 'mock', label: 'Phát lại API đã ghi', hint: 'Dùng bộ phản hồi đã lưu từ tab Mạng / API' },
+  mockClear: { cat: 'mock', label: 'Bỏ mọi giả lập', hint: 'Trả API về bình thường' },
+  reloadWebView: { cat: 'mock', label: 'Tải lại giao diện app', hint: 'Để giả lập có tác dụng từ lúc trang khởi động' }
+}

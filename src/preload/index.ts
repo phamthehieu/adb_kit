@@ -27,6 +27,9 @@ import type {
   UiNode
 } from '../shared/automation'
 import type { FPage, FPageRef } from '../shared/figma'
+import type { AppStateMeta, AppStateResult } from '../shared/appstate'
+import type { EvidenceInput, EvidenceResult } from '../shared/manual'
+import type { StressResult, StressStatus } from '../shared/stress'
 import type { MiniAppList, OpenTiming, WebPage, WebViewProc } from '../shared/miniapp'
 import type { BugInput, BugResult, BugSnap, Severity } from '../shared/bug'
 import type { JiraCheck, JiraConf, JiraIssue, JiraState } from '../shared/jira'
@@ -164,6 +167,29 @@ const api = {
     cut: (serial: string, seconds: number): Promise<{ until: number }> => invoke('net:cut', serial, seconds),
     onCalls: (cb: (calls: NetCall[]) => void) => on('net:calls', cb),
     onInfo: (cb: (msg: string) => void) => on('net:info', cb)
+  },
+  /** Manual testing against a KBKT file, with evidence saved for each result. */
+  manual: {
+    capture: (serial: string, input: EvidenceInput): Promise<EvidenceResult> => invoke('manual:capture', serial, input),
+    openRoot: (): Promise<string> => invoke('manual:open-root'),
+    reveal: (path: string): Promise<void> => invoke('manual:reveal', path)
+  },
+  /** Saved copies of an app's private data (debuggable apps). */
+  appState: {
+    list: (pkg?: string): Promise<AppStateMeta[]> => invoke('state:list', pkg),
+    save: (serial: string, pkg: string, name: string, note: string): Promise<AppStateResult> => invoke('state:save', serial, pkg, name, note),
+    restore: (serial: string, id: string, launch?: boolean): Promise<AppStateResult> => invoke('state:restore', serial, id, launch),
+    rename: (id: string, name: string, note?: string): Promise<AppStateMeta> => invoke('state:rename', id, name, note),
+    remove: (id: string): Promise<void> => invoke('state:remove', id),
+    export: (id: string): Promise<string | null> => invoke('state:export', id),
+    import: (): Promise<AppStateMeta | null> => invoke('state:import'),
+    usage: (): Promise<number> => invoke('state:usage')
+  },
+  /** "Độ bền": put the phone or an app into awkward situations and back. */
+  stress: {
+    status: (serial: string): Promise<StressStatus> => invoke('stress:status', serial),
+    apply: (serial: string, id: string, value: string, pkg?: string): Promise<StressResult> => invoke('stress:apply', serial, id, value, pkg),
+    restore: (serial: string, id?: string, pkg?: string): Promise<StressResult> => invoke('stress:restore', serial, id, pkg)
   },
   perms: {
     list: (serial: string, pkg: string): Promise<PermissionInfo[]> => invoke('perm:list', serial, pkg),
