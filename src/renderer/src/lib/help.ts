@@ -5,7 +5,7 @@
  */
 
 /** Panels a tour step can open (same ids as App's panels). */
-export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req' | 'stress'
+export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req' | 'stress' | 'perf' | 'push'
 
 /** Where a step points: a CSS selector, or a button / label whose text contains `text`. */
 export type Target = string | { text: string; within?: string }
@@ -61,7 +61,7 @@ export const TOPICS: HelpTopic[] = [
       ['Tên máy (thanh trên cùng)', 'Bấm để chuyển giữa nhiều máy đang cắm. Biểu tượng cáp = USB, sóng = Wi-Fi. Chữ vàng "unauthorized" = chưa bấm Cho phép trên điện thoại.'],
       ['+', 'Kết nối máy qua Wi-Fi (nhập ip:cổng) hoặc ghép đôi Gỡ lỗi không dây (Android 11+).'],
       ['⚙ (góc phải)', 'Chất lượng mirror: độ phân giải tối đa, bitrate, FPS. Máy tính yếu hoặc mạng Wi-Fi chậm → chọn 1024 / 4 Mbps / 30.'],
-      ['Thanh công cụ', 'Mỗi nút mở một bảng bên cạnh màn hình điện thoại; bấm lại để đóng. Công cụ xếp theo nhóm: Điện thoại (Tệp, Logcat, Shell), Gỡ lỗi (Mạng/API, Dữ liệu, Quyền, Miniapp), Kiểm thử (Tự động test, Tài liệu YC, Độ bền, Soát UI, So với Figma). Khi cửa sổ hẹp, chỉ công cụ đang mở hiện tên — rê chuột vào biểu tượng để xem tên các nút còn lại. Kéo thanh dọc giữa điện thoại và bảng để đổi độ rộng, bấm đúp để về mặc định.'],
+      ['Thanh công cụ', 'Mỗi nút mở một bảng bên cạnh màn hình điện thoại; bấm lại để đóng. Công cụ xếp theo nhóm: Điện thoại (Tệp, Logcat, Shell), Gỡ lỗi (Mạng/API, Dữ liệu, Quyền, Miniapp), Kiểm thử (Tự động test, Tài liệu YC, Độ bền, Hiệu năng, Thông báo, Soát UI, Figma). Nút “Đủ công cụ / Đơn giản” ở góc trên phải chuyển sang chế độ đơn giản: chỉ giữ công cụ chỉ đọc và test (Tự động test, Tài liệu YC, Hiệu năng, Soát UI, Figma, Logcat), hợp cho BA, PM, người mới. Khi cửa sổ hẹp, chỉ công cụ đang mở hiện tên — rê chuột vào biểu tượng để xem tên các nút còn lại. Kéo thanh dọc giữa điện thoại và bảng để đổi độ rộng, bấm đúp để về mặc định.'],
       ['Màn hình "Bạn muốn làm gì?"', 'Khi chưa mở bảng nào, bên phải điện thoại hiện danh sách việc hay làm (test tự động, test tay theo KBKT, đăng nhập sẵn, điền OTP, soát giao diện, xem API, xem log…). Bấm một thẻ để mở đúng công cụ ở đúng tab.'],
       ['Thanh tiêu đề của bảng', 'Mỗi bảng có tên và một dòng mô tả. "Cách dùng" mở đúng mục hướng dẫn của bảng đó; dấu × đóng bảng.'],
       ['Hộp thoại xác nhận', 'Việc xóa hoặc đổi dữ liệu luôn hỏi lại. Nút an toàn (Hủy) được chọn sẵn khi hành động không hoàn tác được; Esc = hủy.'],
@@ -391,6 +391,7 @@ export const TOPICS: HelpTopic[] = [
       'Mở tab Tự động test › Kịch bản. Chọn app cần test ở ô đầu.',
       'Bấm "Ghi thao tác" (chấm đỏ). Dùng điện thoại bên trái: mỗi chạm, vuốt, cuộn, gõ chữ, Back/Home thành một bước. Chờ dòng "✓ Sẵn sàng" trước mỗi lần chạm để bước được gắn với phần tử (không chỉ toạ độ).',
       'Bấm "Dừng ghi". Thêm bước kiểm tra: "Soi phần tử" → bấm lên chữ / nút trên điện thoại → chọn "+ Kiểm tra có hiển thị", "+ Kiểm tra không hiển thị", "+ Chờ xuất hiện", "+ Bấm" hoặc "+ Nếu thấy thì bấm".',
+      'Muốn chèn cả một tình huống dựng sẵn (mất mạng giữa chừng, app bị giết rồi mở lại, xoay màn hình, từ chối quyền, đo tốc độ mở…): bấm "Mẫu có sẵn" cạnh "Thêm bước". Mẫu chỉ chuẩn bị và chụp màn hình từng giai đoạn; bạn thêm các bước kiểm tra riêng của app vào giữa.',
       'Thêm bước khác bằng nút "Thêm bước": menu chia nhóm (Hay dùng, Thao tác, Chờ & kiểm tra, App & môi trường, Giả lập & API), mỗi mục có mô tả một dòng và ô tìm ở trên cùng.',
       'Bấm vào một bước để mở ô sửa nội dung của nó; các bước còn lại thu gọn một dòng. Biểu tượng màu cho biết nhóm: xanh dương = thao tác, xanh lá = chờ & kiểm tra, tím = app & môi trường, cam = giả lập.',
       'Lưu kịch bản (biểu tượng đĩa) thành file .json.',
@@ -641,6 +642,83 @@ export const TOPICS: HelpTopic[] = [
       { target: tool('stress'), panel: 'stress', title: 'Độ bền', body: 'Đưa máy hoặc app vào tình huống khó rồi xem app xử lý ra sao.' },
       { target: '.sx-body', panel: 'stress', title: 'Các tình huống', body: 'Chia theo nhóm: tiến trình & bộ nhớ, pin & chờ, màn hình, ngôn ngữ & giờ, kết nối, bộ nhớ trống.' },
       { target: { text: 'Khôi phục tất cả' }, panel: 'stress', title: 'Trả về như cũ', body: 'Mọi thay đổi đều được ghi nhớ và có thể trả lại bằng một nút, kể cả sau khi tắt ADB Kit.' }
+    ]
+  },
+
+  {
+    id: 'perf',
+    group: 'Kiểm thử',
+    title: 'Hiệu năng: theo dõi RAM, CPU, FPS trực tiếp',
+    summary: 'Xem app “khỏe” hay “mệt” khi bạn dùng nó; đánh dấu thời điểm lạ và lưu số liệu ra Excel',
+    when: [
+      'App giật, nóng máy hoặc “càng dùng càng nặng” nhưng chưa rõ ở màn hình nào.',
+      'Nghi rò rỉ bộ nhớ: lặp một thao tác thấy RAM chỉ tăng, không giảm.',
+      'Cần số liệu thật để gửi dev thay vì nói “máy bị chậm”.'
+    ],
+    steps: [
+      'Mở tab Hiệu năng, chọn app cần theo dõi.',
+      'Bấm "Bắt đầu đo", rồi dùng app trên điện thoại như bình thường. Mỗi giây có một điểm mới trên biểu đồ.',
+      'Khi vừa làm việc đáng ngờ, gõ ghi chú rồi bấm "Đánh dấu" — dấu hiện thành đường đứt trên mọi biểu đồ.',
+      'Xem khung "Đáng chú ý" (nếu có), rồi bấm "Lưu CSV" để gửi dev hoặc đính vào báo cáo lỗi.'
+    ],
+    buttons: [
+      ['Bắt đầu đo / Dừng / Đo tiếp', 'Chỉ đọc số liệu, không thay đổi gì trên máy. Đo tiếp sẽ nối vào cùng trục thời gian.'],
+      ['Bộ nhớ (RAM)', 'Bộ nhớ app đang dùng (PSS). Tăng đều khi lặp thao tác = nghi rò rỉ.'],
+      ['CPU của app', '100% là dùng hết một lõi. Cao liên tục khi bạn không thao tác = có việc chạy ngầm.'],
+      ['Khung hình / giây', 'Số khung app vẽ mỗi giây. Bằng 0 lúc màn hình đứng yên là bình thường; khi cuộn mà dưới 50 là giật.'],
+      ['Nhiệt độ pin', 'Tăng nhanh khi test lâu = app ngốn pin.'],
+      ['Đánh dấu', 'Ghim một ghi chú vào thời điểm hiện tại. Cũng được ghi vào cột “ghi chú” của file CSV.'],
+      ['Lưu CSV', 'Mỗi dòng một giây, mở được bằng Excel.']
+    ],
+    example: {
+      title: 'Tìm màn hình ngốn RAM',
+      steps: [
+        'Bắt đầu đo. Mở app và về trang chủ, bấm Đánh dấu “trang chủ”.',
+        'Vào Giỏ hàng, thoát ra, lặp 5 lần, đánh dấu “xong 5 lần giỏ hàng”.',
+        'Nhìn biểu đồ RAM: nếu sau mỗi lần vào Giỏ hàng RAM lại cao hơn và không hạ xuống, gửi file CSV cho dev kèm các dấu đánh.'
+      ]
+    },
+    faq: [
+      ['Biểu đồ trống, báo “App chưa chạy”', 'Mở app trên điện thoại; số liệu sẽ tự xuất hiện. Chỉ đo được app đang chạy.'],
+      ['FPS luôn bằng 0', 'Màn hình đứng yên thì không có khung mới. Cuộn hoặc chạm để thấy giá trị.'],
+      ['CPU hiện hơn 100%', 'Bình thường: 100% là một lõi; app dùng nhiều lõi có thể cao hơn.']
+    ],
+    tips: ['Đáng chú ý chỉ là gợi ý “nên xem”, không phải kết luận lỗi.', 'Máy cắm sạc thường nóng hơn nên đừng so nhiệt độ giữa lần có sạc và không sạc.'],
+    tour: [
+      { target: tool('perf'), panel: 'perf', title: 'Hiệu năng', body: 'Theo dõi app bạn đang dùng theo thời gian thực.' },
+      { target: '.pf-panel .log-tools', panel: 'perf', title: 'Chọn app và bắt đầu', body: 'Chọn app, bấm Bắt đầu đo. Hoàn toàn chỉ đọc.' }
+    ]
+  },
+  {
+    id: 'push',
+    group: 'Kiểm thử',
+    title: 'Thông báo: thử chạm vào thông báo không cần server',
+    summary: 'Đăng thông báo thử lên máy, xem app mở đúng màn hình khi chạm vào — không cần BE hay khóa Firebase',
+    when: [
+      'Muốn xem thông báo hiển thị ra sao (tiêu đề dài, nội dung dài) mà không đợi BE bắn.',
+      'Kiểm tra chạm vào thông báo thì app mở đúng màn hình, kể cả khi app đã bị tắt hẳn.',
+      'Thử deep link và dữ liệu đính kèm (orderId, type…) mà push thật sẽ mang theo.'
+    ],
+    steps: [
+      'Mở tab Thông báo, chọn app.',
+      'Nhập tiêu đề và nội dung, chọn kiểu hiển thị.',
+      'Chọn "Khi chạm vào thông báo": mở app, mở liên kết (deep link) hoặc không làm gì. Thêm dữ liệu đính kèm nếu cần.',
+      'Bấm "Đăng thông báo lên điện thoại", kéo thanh thông báo xuống và chạm vào. Hoặc bấm "Chỉ mô phỏng lúc chạm" để mở app ngay.'
+    ],
+    buttons: [
+      ['Đăng thông báo lên điện thoại', 'Máy hiện một thông báo thật. Chạm vào sẽ mở app đúng như đã chọn.'],
+      ['Chỉ mô phỏng lúc chạm', 'Bỏ qua thông báo, mở app đúng như khi chạm vào nó.'],
+      ['Dữ liệu đính kèm', 'Cặp khóa = giá trị giống phần data của tin push. Không dùng dấu cách.']
+    ],
+    faq: [
+      ['Có bắn được tin FCM thẳng vào app không?', 'Không. Android chỉ cho Google Play Services gửi. Muốn thử đúng đường FCM: lấy FCM token (nhờ dev in ra log) rồi dùng Send test message trong Firebase Console.'],
+      ['Thông báo không hiện', 'Android 13 trở lên cần cấp quyền thông báo; thông báo do máy đăng nên cũng bị chặn nếu bật Không làm phiền.'],
+      ['Báo lỗi “có dấu cách”', 'Máy cắt lệnh ở dấu cách. Bỏ dấu cách trong link / dữ liệu đính kèm.']
+    ],
+    tips: ['Kết hợp với tab Độ bền: giết app trước, rồi chạm thông báo để thử mở nguội.'],
+    tour: [
+      { target: tool('push'), panel: 'push', title: 'Thông báo', body: 'Đăng thông báo thử và xem app xử lý khi chạm.' },
+      { target: '.pu-body', panel: 'push', title: 'Ba bước', body: 'Nội dung → khi chạm vào → thử.' }
     ]
   },
 

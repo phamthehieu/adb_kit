@@ -30,6 +30,8 @@ import type { FPage, FPageRef } from '../shared/figma'
 import type { AppStateMeta, AppStateResult } from '../shared/appstate'
 import type { EvidenceInput, EvidenceResult } from '../shared/manual'
 import type { StressResult, StressStatus } from '../shared/stress'
+import type { LiveMark, LiveSample } from '../shared/perflive'
+import type { PushInfo, PushInput, PushResult } from '../shared/push'
 import type { MiniAppList, OpenTiming, WebPage, WebViewProc } from '../shared/miniapp'
 import type { BugInput, BugResult, BugSnap, Severity } from '../shared/bug'
 import type { JiraCheck, JiraConf, JiraIssue, JiraState } from '../shared/jira'
@@ -190,6 +192,16 @@ const api = {
     status: (serial: string): Promise<StressStatus> => invoke('stress:status', serial),
     apply: (serial: string, id: string, value: string, pkg?: string): Promise<StressResult> => invoke('stress:apply', serial, id, value, pkg),
     restore: (serial: string, id?: string, pkg?: string): Promise<StressResult> => invoke('stress:restore', serial, id, pkg)
+  },
+  perf: {
+    sample: (serial: string, pkg: string, t0: number): Promise<LiveSample> => invoke('perf:sample', serial, pkg, t0),
+    reset: (serial: string, pkg: string): Promise<void> => invoke('perf:reset', serial, pkg),
+    exportCsv: (pkg: string, samples: LiveSample[], marks: LiveMark[]): Promise<string | null> => invoke('perf:export', pkg, samples, marks)
+  },
+  push: {
+    info: (serial: string, pkg: string): Promise<PushInfo> => invoke('push:info', serial, pkg),
+    post: (serial: string, input: PushInput): Promise<PushResult> => invoke('push:post', serial, input),
+    open: (serial: string, input: PushInput): Promise<PushResult> => invoke('push:open', serial, input)
   },
   perms: {
     list: (serial: string, pkg: string): Promise<PermissionInfo[]> => invoke('perm:list', serial, pkg),

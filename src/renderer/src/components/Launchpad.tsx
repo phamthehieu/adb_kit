@@ -1,4 +1,4 @@
-import { Bot, ClipboardCheck, Database, FileText, Hammer, KeyRound, MessageSquareText, Network, ScanEye, ScrollText, ShieldCheck, BookOpen } from 'lucide-react'
+import { BellRing, Bot, ClipboardCheck, Gauge, Database, FileText, Hammer, KeyRound, MessageSquareText, Network, ScanEye, ScrollText, ShieldCheck, BookOpen } from 'lucide-react'
 
 interface Task {
   icon: React.ReactNode
@@ -16,10 +16,12 @@ const TEST: Task[] = [
   { icon: <MessageSquareText size={18} />, title: 'Điền mã OTP', desc: 'Lấy mã từ thông báo trên điện thoại và điền một chạm', panel: 'data', prefs: { dataTab: 'otp' } },
   { icon: <ScanEye size={18} />, title: 'Soát giao diện', desc: 'Tìm chữ bị cắt, vùng bấm quá nhỏ; thử cỡ chữ to, chế độ tối', panel: 'check', prefs: { checkTab: 'scan' } },
   { icon: <Hammer size={18} />, title: 'Thử tình huống khó', desc: 'App bị giết, thiếu RAM, Doze, đổi ngôn ngữ / giờ, đầy bộ nhớ', panel: 'stress' },
+  { icon: <BellRing size={18} />, title: 'Thử chạm vào thông báo', desc: 'Đăng thông báo thử lên máy, xem app mở đúng màn hình — không cần BE hay khóa Firebase', panel: 'push' },
   { icon: <FileText size={18} />, title: 'Từ tài liệu yêu cầu (BA)', desc: 'Nhập file Word, sinh testcase và soát màn hình theo tài liệu', panel: 'req' }
 ]
 
 const DEBUG: Task[] = [
+  { icon: <Gauge size={18} />, title: 'Xem app có giật, nặng, nóng máy không', desc: 'RAM, CPU, khung hình, pin theo thời gian thực; đánh dấu và lưu ra Excel', panel: 'perf' },
   { icon: <Network size={18} />, title: 'Xem API của app, giả lập lỗi server', desc: 'Mọi request theo thời gian thực; thử 500, mạng chậm, mất mạng', panel: 'net' },
   { icon: <ScrollText size={18} />, title: 'Xem log và crash', desc: 'Logcat lọc theo app, mức log và từ khóa', panel: 'logcat' },
   { icon: <ShieldCheck size={18} />, title: 'Cấp hoặc thu hồi quyền', desc: 'Máy ảnh, vị trí, thông báo… hoặc đưa app về như mới cài', panel: 'perm' },
@@ -30,7 +32,10 @@ const DEBUG: Task[] = [
  * What the empty workspace offers: the things testers and developers actually come to do, in their
  * own words, each opening the right panel on the right tab. Disappears as soon as a panel is open.
  */
-export function Launchpad({ onOpen }: { onOpen: (panel: string, prefs?: Record<string, string>) => void }) {
+export function Launchpad({ onOpen, only }: { onOpen: (panel: string, prefs?: Record<string, string>) => void; only?: string[] }) {
+  const allowed = (t: Task): boolean => !only || only.includes(t.panel)
+  const test = TEST.filter(allowed)
+  const debug = DEBUG.filter(allowed)
   const card = (t: Task): React.ReactNode => (
     <button key={t.title} className="l-card" onClick={() => onOpen(t.panel, t.prefs)}>
       <span className="l-ico">{t.icon}</span>
@@ -44,10 +49,11 @@ export function Launchpad({ onOpen }: { onOpen: (panel: string, prefs?: Record<s
     <aside className="launch" aria-label="Bắt đầu nhanh">
       <h2>Bạn muốn làm gì?</h2>
       <div className="l-sub">Chọn một việc, ADB Kit mở đúng công cụ cho bạn. Điện thoại đã sẵn sàng ở bên trái.</div>
+      {only && <div className="l-sub">Đang ở <b>chế độ đơn giản</b> — chỉ hiện công cụ chỉ đọc và test. Bấm “Đơn giản” trên thanh công cụ để hiện đủ.</div>}
       <div className="l-cap">Kiểm thử</div>
-      <div className="l-grid">{TEST.map(card)}</div>
-      <div className="l-cap">Gỡ lỗi</div>
-      <div className="l-grid">{DEBUG.map(card)}</div>
+      <div className="l-grid">{test.map(card)}</div>
+      {debug.length > 0 && <div className="l-cap">Gỡ lỗi</div>}
+      <div className="l-grid">{debug.map(card)}</div>
       <div className="l-foot">
         <button className="l-card" onClick={() => onOpen('help')}>
           <span className="l-ico"><BookOpen size={18} /></span>

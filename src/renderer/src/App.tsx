@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, Bot, Bug, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
+import { AppWindow, BellRing, Bot, Bug, Eye, Gauge, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
 import { ScreenView } from './components/ScreenView'
@@ -27,13 +27,17 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { Splitter } from './components/Splitter'
 import { PanelFrame } from './components/PanelFrame'
 import { StressPanel } from './components/StressPanel'
+import { PerfPanel } from './components/PerfPanel'
+import { PushPanel } from './components/PushPanel'
 import { Launchpad } from './components/Launchpad'
 import { DialogHost, tell } from './lib/dialog'
 import { withTransition } from './lib/motion'
 
-type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req' | 'stress'
+type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req' | 'stress' | 'perf' | 'push'
 const LEFT_PANELS: Panel[] = ['files', 'perm']
-const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req', 'stress']
+const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req', 'stress', 'perf', 'push']
+/** "Chế độ đơn giản" (BA, PM, người mới): only tools that read or test, nothing that changes the phone's settings or data. */
+const SIMPLE_PANELS: Panel[] = ['auto', 'req', 'check', 'figma', 'perf', 'logcat', 'help']
 type Status = { text: string; error?: boolean; path?: string } | null
 
 /** Title bar of each tool panel: name, what it is for, and the guide topic behind "Cách dùng". */
@@ -44,6 +48,8 @@ const FRAMES: Partial<Record<Panel, { icon: React.ReactNode; title: string; desc
   net: { icon: <Network size={16} />, title: 'Mạng / API', desc: 'Xem request của app; giả lập lỗi, 500, mạng chậm', help: 'net' },
   data: { icon: <Database size={16} />, title: 'Dữ liệu', desc: 'OTP và tài khoản test, dữ liệu app, trạng thái đăng nhập đã lưu, deep link', help: 'appdata' },
   stress: { icon: <Hammer size={16} />, title: 'Độ bền', desc: 'Giết tiến trình, thiếu RAM, Doze, đổi ngôn ngữ / giờ, đầy bộ nhớ — bắt lỗi chỉ có ở máy người dùng', help: 'stress' },
+  perf: { icon: <Gauge size={16} />, title: 'Hiệu năng', desc: 'RAM, CPU, khung hình và pin của app theo thời gian thực; đánh dấu và lưu ra Excel', help: 'perf' },
+  push: { icon: <BellRing size={16} />, title: 'Thông báo', desc: 'Đăng thông báo thử lên máy và xem app mở đúng màn hình khi chạm — không cần server', help: 'push' },
   perm: { icon: <ShieldCheck size={16} />, title: 'Quyền của app', desc: 'Bật/tắt quyền, cấp hết, đưa app về như mới cài', help: 'perm' },
   mini: { icon: <AppWindow size={16} />, title: 'Miniapp', desc: 'Soi WebView, mở DevTools, miniapp đã tải, mở link nhanh', help: 'mini' },
   auto: { icon: <Bot size={16} />, title: 'Tự động test', desc: 'Ghi thao tác thành kịch bản, chạy lại, xuất báo cáo và KBKT', help: 'auto' },
@@ -240,7 +246,15 @@ export function App() {
   /** Panel changes shift the whole layout: animate them (morph) instead of jumping. */
   const go = (next: Panel | ((cur: Panel) => Panel)): void => withTransition(() => setPanel(next))
   const toggle = (p: Panel) => () => go((cur) => (cur === p ? 'none' : p))
-  const tool = (p: Panel, icon: React.ReactNode, label: string) => (
+  const [simple, setSimple] = useState(() => localStorage.getItem('simpleMode') === '1')
+  const toggleSimple = (): void => {
+    const next = !simple
+    localStorage.setItem('simpleMode', next ? '1' : '0')
+    setSimple(next)
+    if (next && panel !== 'none' && !SIMPLE_PANELS.includes(panel)) go('none')
+  }
+  const tool = (p: Panel, icon: React.ReactNode, label: string) =>
+    simple && !SIMPLE_PANELS.includes(p) ? null : (
     <button className={`iconbtn ${panel === p ? 'on' : ''}`} onClick={toggle(p)} disabled={!ready} data-tour={`tool-${p}`} title={FRAMES[p]?.desc ? `${label} — ${FRAMES[p]!.desc}` : label} aria-pressed={panel === p}>
       {icon} <span className="tl">{label}</span>
     </button>
@@ -275,6 +289,23 @@ export function App() {
         onOptions={changeOptions}
         extra={
           <>
+            <button
+              className={`iconbtn ${simple ? 'on' : ''}`}
+              onClick={toggleSimple}
+              aria-pressed={simple}
+              title={simple ? 'Đang ở chế độ đơn giản: chỉ hiện công cụ chỉ đọc và test. Bấm để hiện đủ công cụ.' : 'Chế độ đơn giản: ẩn các công cụ thay đổi dữ liệu / cài đặt máy, hợp cho BA, PM và người mới'}
+            >
+              <Eye size={14} /> <span className="tl">{simple ? 'Đơn giản' : 'Đủ công cụ'}</span>
+            </button>
+            <button
+              className={`iconbtn ${panel === 'help' ? 'on' : ''}`}
+              data-tour="tool-help"
+              onClick={toggle('help')}
+              title="Hướng dẫn sử dụng từng tính năng, có chế độ chỉ trực tiếp vào các nút"
+              aria-pressed={panel === 'help'}
+            >
+              <HelpCircle size={14} /> <span className="tl">Hướng dẫn</span>
+            </button>
             {details && (
               <span
                 className="devchip"
@@ -304,31 +335,26 @@ export function App() {
           {tool('logcat', <ScrollText size={14} />, 'Logcat')}
           {tool('shell', <SquareTerminal size={14} />, 'Shell')}
         </div>
-        <div className="tgroup" role="group" aria-label="Gỡ lỗi">
-          <span className="tg-cap">Gỡ lỗi</span>
-          {tool('net', <Network size={14} />, 'Mạng / API')}
-          {tool('data', <Database size={14} />, 'Dữ liệu')}
-          {tool('perm', <ShieldCheck size={14} />, 'Quyền')}
-          {tool('mini', <AppWindow size={14} />, 'Miniapp')}
-        </div>
+        {!simple && (
+          <div className="tgroup" role="group" aria-label="Gỡ lỗi">
+            <span className="tg-cap">Gỡ lỗi</span>
+            {tool('net', <Network size={14} />, 'Mạng / API')}
+            {tool('data', <Database size={14} />, 'Dữ liệu')}
+            {tool('perm', <ShieldCheck size={14} />, 'Quyền')}
+            {tool('mini', <AppWindow size={14} />, 'Miniapp')}
+          </div>
+        )}
         <div className="tgroup" role="group" aria-label="Kiểm thử">
           <span className="tg-cap">Kiểm thử</span>
           {tool('auto', <Bot size={14} />, 'Tự động test')}
           {tool('req', <FileText size={14} />, 'Tài liệu YC')}
           {tool('stress', <Hammer size={14} />, 'Độ bền')}
+          {tool('perf', <Gauge size={14} />, 'Hiệu năng')}
+          {tool('push', <BellRing size={14} />, 'Thông báo')}
           {tool('check', <ScanEye size={14} />, 'Soát UI')}
-          {tool('figma', <Ruler size={14} />, 'So với Figma')}
+          {tool('figma', <Ruler size={14} />, 'Figma')}
         </div>
         <span className="spacer" />
-        <button
-          className={`iconbtn ${panel === 'help' ? 'on' : ''}`}
-          data-tour="tool-help"
-          onClick={toggle('help')}
-          title="Hướng dẫn sử dụng từng tính năng, có chế độ chỉ trực tiếp vào các nút"
-          aria-pressed={panel === 'help'}
-        >
-          <HelpCircle size={14} /> <span className="tl">Hướng dẫn</span>
-        </button>
         <button className="iconbtn bug-btn" data-tour="bug" disabled={!ready} onClick={() => setBugOpen(true)} title="Báo lỗi ngay: lưu ảnh, video vừa rồi, log, API và các thao tác (F8)">
           <Bug size={14} /> Báo lỗi <kbd>F8</kbd>
         </button>
@@ -426,6 +452,7 @@ export function App() {
             </ErrorBoundary>
             {panel === 'none' && (
               <Launchpad
+                only={simple ? SIMPLE_PANELS : undefined}
                 onOpen={(p, prefs) => {
                   for (const [k, v] of Object.entries(prefs ?? {})) localStorage.setItem(k, v)
                   go(p as Panel)
@@ -445,6 +472,8 @@ export function App() {
             )}
             {panel === 'data' && frame('data', <ErrorBoundary key="data" name="Panel Dữ liệu" className="panel wide"><DataPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'req' && frame('req', <ErrorBoundary key="req" name="Panel Tài liệu yêu cầu" className="panel wide"><ReqPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'perf' && frame('perf', <ErrorBoundary key="perf" name="Panel Hiệu năng" className="panel wide"><PerfPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'push' && frame('push', <ErrorBoundary key="push" name="Panel Thông báo" className="panel wide"><PushPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'stress' && frame('stress', <ErrorBoundary key="stress" name="Panel Độ bền" className="panel wide"><StressPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'check' && frame('check', <ErrorBoundary key="check" name="Panel Soát UI" className="panel wide"><CheckPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'mini' &&

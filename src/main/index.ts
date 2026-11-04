@@ -14,6 +14,10 @@ import { SuiteRunner, readScript, readSuite, templateFor, writeManualResults, wr
 import { ReqDocStore, exportCases, fillValue, scanScreen } from './reqdoc'
 import { setStateRoot, stateStore } from './appstate'
 import { Stress, StressStore } from './stress'
+import { liveCsv, liveReset, liveSample } from './perflive'
+import { pushInfo, pushOpen, pushPost } from './push'
+import type { LiveMark, LiveSample } from '../shared/perflive'
+import type { PushInput } from '../shared/push'
 import { captureEvidence, kbktFolder } from './manual'
 import type { EvidenceInput } from '../shared/manual'
 import { kbktNameOf, type ReqCase } from '../shared/reqdoc'
@@ -625,6 +629,26 @@ function registerToolsIpc(): void {
   ipcMain.handle('stress:status', (_e, serial: string) => stress.status(serial))
   ipcMain.handle('stress:apply', (_e, serial: string, id: string, value: string, pkg?: string) => stress.apply(serial, id, value, pkg))
   ipcMain.handle('stress:restore', (_e, serial: string, id?: string, pkg?: string) => stress.restore(serial, id, pkg))
+
+  // Live performance of the app under test
+  ipcMain.handle('perf:sample', (_e, serial: string, pkg: string, t0: number) => liveSample(serial, pkg, t0))
+  ipcMain.handle('perf:reset', (_e, serial: string, pkg: string) => liveReset(serial, pkg))
+  ipcMain.handle('perf:export', async (_e, pkg: string, samples: LiveSample[], marks: LiveMark[]) => {
+    const stamp = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const r = await dialog.showSaveDialog(win!, {
+      title: 'Lưu số liệu hiệu năng',
+      defaultPath: join(app.getPath('documents'), `hieu-nang_${pkg.replace(/[^\w.-]+/g, '_') || 'app'}_${stamp}.csv`),
+      filters: [{ name: 'CSV (mở bằng Excel)', extensions: ['csv'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    writeFileSync(r.filePath, liveCsv(samples, marks))
+    return r.filePath
+  })
+
+  // Notification tests (no server / Firebase key)
+  ipcMain.handle('push:info', (_e, serial: string, pkg: string) => pushInfo(serial, pkg))
+  ipcMain.handle('push:post', (_e, serial: string, input: PushInput) => pushPost(serial, input))
+  ipcMain.handle('push:open', (_e, serial: string, input: PushInput) => pushOpen(serial, input))
 }
 
 function registerBugIpc(): void {

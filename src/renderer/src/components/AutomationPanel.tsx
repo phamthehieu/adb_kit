@@ -53,6 +53,8 @@ import { ask, tell } from '../lib/dialog'
 import { StateStepFields } from './AppStatePanel'
 import { ManualTestPanel } from './ManualTestPanel'
 import { AddStepMenu } from './AddStepMenu'
+import { TemplateMenu } from './TemplateMenu'
+import { type Template } from '../lib/templates'
 import { CAT_INFO, stepCat, stepIcon } from '../lib/stepMeta'
 
 type StepState = { state: 'running' | 'ok' | 'failed' | 'warn'; message?: string }
@@ -407,6 +409,17 @@ export function AutomationPanel({ serial }: { serial: string }) {
       setSelected(at)
       return { ...s, steps }
     })
+  }
+  const insertTemplate = (t: Template): void => {
+    const made = t.make(script.app)
+    setScript((s) => {
+      const steps = [...s.steps]
+      const at = selected !== null && selected < steps.length ? selected + 1 : steps.length
+      steps.splice(at, 0, ...made)
+      setSelected(at)
+      return { ...s, steps }
+    })
+    void tell(`${t.title}\n\nĐã chèn ${made.length} bước.\n${t.after}${script.app ? '' : '\n\nLưu ý: kịch bản chưa chọn app nên các bước cần tên app đang để trống — hãy chọn app ở phần thông tin kịch bản.'}`, { title: 'Đã chèn mẫu' })
   }
   const updateStep = (i: number, patch: Partial<Step>): void =>
     setScript((s) => ({ ...s, steps: s.steps.map((st, k) => (k === i ? ({ ...st, ...patch } as Step) : st)) }))
@@ -1012,6 +1025,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
         <b>{script.steps.length ? `${script.steps.length} bước` : 'Các bước'}</b>
         <span className="muted">{editable && script.steps.length ? 'Bấm vào một bước để sửa nội dung' : ''}</span>
         <span className="spacer" />
+        <TemplateMenu disabled={!editable} onPick={insertTemplate} />
         <AddStepMenu
           primary={script.steps.length === 0}
           keys={ADDABLE.map((a) => a.key)}
@@ -1043,7 +1057,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
                 <span>Bấm lên một nút / chữ trên màn hình để thêm bước “chờ xuất hiện”, “kiểm tra”, “nếu thấy thì bấm”.</span>
               </button>
             </div>
-            <div className="start-foot">Hoặc bấm <b>Thêm bước</b> ở trên để tự chọn từng bước. Xong bấm <b>Chạy</b>.</div>
+            <div className="start-foot">Hoặc bấm <b>Mẫu có sẵn</b> để chèn tình huống dựng sẵn (mất mạng, app bị giết, xoay màn hình…), hay <b>Thêm bước</b> để tự chọn từng bước. Xong bấm <b>Chạy</b>.</div>
           </div>
         )}
         {script.steps.map((s, i) => {
