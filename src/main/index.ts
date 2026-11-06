@@ -43,6 +43,7 @@ import { appLinks, openActivity } from './applinks'
 import { Explorer, type ExploreOptions } from './explore'
 import type { JiraConf } from '../shared/jira'
 import { cutNetwork, getConfig, restoreConfig, setAppLocale, setConfig } from './devconf'
+import { applyFormFactor, getAvailableCutouts, resetFormFactor, scanMatrix } from './formfactors'
 import { clearAllLocations, clearLocation, gpsActive, moveRoute, searchPlace, setLocation, setupMapRequests } from './gps'
 import type { ConfKey } from '../shared/devconf'
 import { parseCsv, type FreshMode, type FreshPerms, type MockRule, type NetCall, type NetProfile, type RunOptions, type Script, type Suite } from '../shared/automation'
@@ -463,6 +464,10 @@ function registerDevConfIpc(): void {
   ipcMain.handle('gps:active', (_e, serial: string) => gpsActive(serial))
   ipcMain.handle('gps:search', (_e, query: string, near?: [number, number]) => searchPlace(query, near))
   setupMapRequests()
+  ipcMain.handle('matrix:apply', (_e, serial: string, presetId: string) => applyFormFactor(serial, presetId))
+  ipcMain.handle('matrix:reset', (_e, serial: string) => resetFormFactor(serial))
+  ipcMain.handle('matrix:scan', (_e, serial: string) => scanMatrix(serial))
+  ipcMain.handle('matrix:cutouts', (_e, serial: string) => getAvailableCutouts(serial))
   // Never leave a fake location behind when ADB Kit closes.
   app.on('before-quit', () => void clearAllLocations())
   ipcMain.handle('net:profile', (_e, p: NetProfile | null) => liveNet?.setProfile(p))

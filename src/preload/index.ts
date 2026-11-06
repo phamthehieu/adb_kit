@@ -39,6 +39,7 @@ import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '../share
 import type { AppLink, AppScreen } from '../main/applinks'
 import type { ExploreOptions, ExploreProgress } from '../main/explore'
 import type { ReqCase, ReqDoc, ReqDocInfo, ScreenScan } from '../shared/reqdoc'
+import type { MatrixItem } from '../shared/formfactors'
 
 export interface CrashEvent {
   serial: string
@@ -251,6 +252,12 @@ const api = {
   rec: {
     start: (serial: string): Promise<number> => invoke('rec:start', serial),
     stop: (): Promise<string | null> => invoke('rec:stop')
+  },
+  matrix: {
+    apply: (serial: string, presetId: string): Promise<{ ok: boolean; message: string }> => invoke('matrix:apply', serial, presetId),
+    reset: (serial: string): Promise<{ ok: boolean; message: string }> => invoke('matrix:reset', serial),
+    scan: (serial: string): Promise<MatrixItem[]> => invoke('matrix:scan', serial),
+    cutouts: (serial: string): Promise<string[]> => invoke('matrix:cutouts', serial)
   },
   conf: {
     get: (serial: string): Promise<DevConfig> => invoke('conf:get', serial),

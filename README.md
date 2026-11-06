@@ -246,6 +246,11 @@ Tab **Soát UI** dùng để kiểm tra app có vỡ giao diện khi người d�
 
 Rê chuột hoặc bấm vào từng mục để khoanh phần tử trên màn hình điện thoại. Nút **Thử chữ to 1.3× + soát** làm cả hai bước một lần. Khi đã có kết quả, đổi cấu hình nào cũng tự soát lại. Đây là kiểm tra theo kinh nghiệm, nên xem lại bằng mắt trước khi báo lỗi. Màn hệ thống (màn khóa, thanh thông báo) không được soát.
 
+**Đa màn hình & Máy gập** (tab Soát UI):
+- Ảo hóa kích thước màn hình gập (**Galaxy Z Fold** Mở 1812×2176 và Gập 904×2316; **Galaxy Z Flip** 1080×2640), **Tablet** 11" và 8.4", phone siêu dài 21:9, và các kiểu **khuyết đỉnh** (tai thỏ sâu, camera nốt ruồi giữa/góc, màn hình thác nước) ngay trên máy thật mà **không cần cài máy ảo nặng**.
+- Nút **"⚡ Quét ma trận 4 màn hình"**: tự động biến hình màn hình qua Z Fold Mở, Z Fold Gập, Tablet và Tai thỏ trong 10 giây, chụp ảnh từng màn hình và xuất **Gallery so sánh Responsive** có kèm modal phóng to để soi chi tiết.
+- Tự động ghi nhớ kích thước và mật độ vật lý gốc của máy, có nút **Khôi phục màn hình gốc** an toàn.
+
 ## Báo lỗi nhanh (F8)
 
 Tester gặp lỗi khi đang thao tác tay thì bấm **Báo lỗi** trên thanh công cụ, hoặc phím **F8**. Ngay lúc bấm, trước khi tester kịp gõ gì, ADB Kit lưu lại:

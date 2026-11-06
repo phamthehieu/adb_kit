@@ -436,6 +436,9 @@ export function ScreenView(props: Props) {
             {auto.maskEdit && (
               <MaskLayer key={auto.maskEdit.index} initial={auto.maskEdit.masks} left={BEZEL} top={BEZEL} width={cssW} height={cssH} />
             )}
+            {auto.activeCutout && (
+              <div className={`screen-cutout cutout-${auto.activeCutout.replace('cutout_', '')}`} />
+            )}
             {locked && (
               // Blocks taps / scrolls on the mirror while a test drives the device.
               <div className="input-lock" onPointerDown={(e) => e.preventDefault()} onWheel={(e) => e.preventDefault()}>

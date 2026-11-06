@@ -1438,3 +1438,45 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .devchip.dim { opacity: .65; }
 /* On ordinary laptop widths the group captions cost a whole second toolbar row: the borders already group the tools. */
 @media (max-width: 1500px) { .tg-cap { display: none; } .tgroup { padding-left: 4px; } }
+
+/* ---------- matrix form factors ---------- */
+.matrix-section { display: flex; flex-direction: column; gap: 12px; }
+.matrix-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.matrix-actions { display: flex; gap: 8px; align-items: center; }
+.matrix-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.matrix-group { background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.matrix-group-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--fg); }
+.matrix-preset-list { display: flex; flex-direction: column; gap: 6px; }
+.matrix-preset-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; transition: border-color .15s, background .15s; }
+.matrix-preset-item:hover { border-color: var(--line-2); }
+.matrix-preset-item.active { border-color: var(--accent); background: var(--accent-dim); }
+.matrix-preset-text { flex: 1; min-width: 0; }
+.matrix-preset-name { font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 5px; color: var(--fg); }
+.matrix-preset-sub { font-size: 10px; color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.matrix-gallery-box { background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.matrix-gallery-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+.matrix-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.matrix-card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: pointer; transition: border-color .15s, transform .15s; }
+.matrix-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+.matrix-card-thumb { position: relative; width: 100%; aspect-ratio: 9/16; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.matrix-card-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.matrix-card-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; gap: 5px; color: #fff; opacity: 0; transition: opacity .15s ease; font-size: 11px; }
+.matrix-card:hover .matrix-card-overlay { opacity: 1; }
+.matrix-card-info { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.matrix-card-title { font-size: 11px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.matrix-card-spec { font-size: 10px; color: var(--accent); font-family: var(--mono); }
+.matrix-card-desc { font-size: 9.5px; color: var(--fg-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.matrix-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+.matrix-modal-content { background: var(--bg-1); border: 1px solid var(--line-2); border-radius: 8px; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+.matrix-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.matrix-modal-body { padding: 12px; display: flex; align-items: center; justify-content: center; overflow: auto; max-height: calc(90vh - 50px); }
+.matrix-modal-body img { max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+.matrix-preset-item.dimmed { opacity: 0.5; }
+
+/* Visual Cutouts on Mirror Canvas */
+.screen-cutout { position: absolute; background: #000; z-index: 5; pointer-events: none; box-shadow: 0 0 4px rgba(0,0,0,0.8); }
+.cutout-tall { top: 6px; left: 50%; transform: translateX(-50%); width: 32%; height: 26px; border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
+.cutout-double { top: 6px; left: 50%; transform: translateX(-50%); width: 28%; height: 22px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+.cutout-corner { top: 10px; right: 12px; width: 30px; height: 30px; border-radius: 50%; }
+.cutout-hole { top: 12px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; border-radius: 50%; }
+.cutout-waterfall { top: 6px; bottom: 6px; width: 14px; background: linear-gradient(to right, rgba(0,0,0,0.6), transparent); left: 6px; }

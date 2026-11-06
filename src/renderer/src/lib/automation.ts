@@ -16,11 +16,13 @@ interface State {
   unlocked: boolean
   /** Drawing ignore-regions for a visual step on the mirrored screen. */
   maskEdit: { index: number; masks: Mask[] } | null
+  /** Active display cutout overlay for visual indication on mirror screen. */
+  activeCutout: string | null
 }
 
 export type Mask = [number, number, number, number]
 
-let state: State = { recording: false, inspecting: false, highlight: null, running: false, unlocked: false, maskEdit: null }
+let state: State = { recording: false, inspecting: false, highlight: null, running: false, unlocked: false, maskEdit: null, activeCutout: null }
 
 const maskListeners = new Set<(index: number, masks: Mask[] | null) => void>()
 /** Called by the screen when the tester finishes (masks) or cancels (null) drawing. */

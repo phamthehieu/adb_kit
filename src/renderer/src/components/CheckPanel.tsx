@@ -5,6 +5,7 @@ import { autoStore } from '../lib/automation'
 import { lintUi } from '@shared/uiLint'
 import { MapPicker, type LatLng } from './MapPicker'
 import { PackagePicker } from './PackagePicker'
+import { MatrixSection } from './MatrixSection'
 
 const KIND: Record<IssueKind, string> = {
   target: 'Vùng bấm nhỏ',
@@ -328,11 +329,11 @@ export function CheckPanel({ serial }: { serial: string }) {
   const [scanning, setScanning] = useState(false)
   const [scanInfo, setScanInfo] = useState('')
   const [sel, setSel] = useState<number | null>(null)
-  const [tab, setTab] = useState<'scan' | 'conf' | 'gps'>(() => {
+  const [tab, setTab] = useState<'scan' | 'conf' | 'gps' | 'matrix'>(() => {
     const t = localStorage.getItem('checkTab')
-    return t === 'conf' || t === 'gps' ? t : 'scan'
+    return t === 'conf' || t === 'gps' || t === 'matrix' ? t : 'scan'
   })
-  const pickTab = (t: 'scan' | 'conf' | 'gps'): void => {
+  const pickTab = (t: 'scan' | 'conf' | 'gps' | 'matrix'): void => {
     setTab(t)
     localStorage.setItem('checkTab', t)
     autoStore.set({ highlight: null })
@@ -438,6 +439,7 @@ export function CheckPanel({ serial }: { serial: string }) {
       <div className="panel-head">
         <div className="seg">
           <button className={tab === 'scan' ? 'on' : ''} onClick={() => pickTab('scan')} title="Tự tìm lỗi giao diện trên màn hình đang mở">Soát giao diện</button>
+          <button className={tab === 'matrix' ? 'on' : ''} onClick={() => pickTab('matrix')} title="Ảo hóa máy gập Z Fold, Z Flip, tablet, camera tai thỏ mà không cần máy ảo">Đa màn hình & Máy gập</button>
           <button className={tab === 'conf' ? 'on' : ''} onClick={() => pickTab('conf')} title="Chế độ tối, cỡ chữ, kích thước hiển thị, hiệu ứng">Cấu hình máy</button>
           <button className={tab === 'gps' ? 'on' : ''} onClick={() => pickTab('gps')} title="Giả vị trí GPS của điện thoại">Vị trí GPS</button>
         </div>
@@ -490,6 +492,8 @@ export function CheckPanel({ serial }: { serial: string }) {
           {conf && conf.changed.length > 0 && <div className="ck-note muted">Thiết lập gốc đã được ghi nhớ — nhớ bấm Khôi phục khi test xong (vẫn khôi phục được sau khi tắt ADB Kit).</div>}
         </section>
         )}
+
+        {tab === 'matrix' && <MatrixSection serial={serial} />}
 
         {tab === 'gps' && <GpsSection serial={serial} />}
 
