@@ -65,7 +65,14 @@ export async function pushPost(serial: string, p: PushInput): Promise<PushResult
   }
   const r = await shell(serial, postCommand(p, launcher), 20_000)
   const out = `${r.stdout}\n${r.stderr}`.trim()
-  if (/exception|error|unknown|usage:/i.test(out)) return bad(`Máy không nhận lệnh: ${out.split(/\r?\n/).slice(0, 3).join(' | ')}`)
+  if (/exception|error|unknown|usage:/i.test(out)) {
+    if (/Permission Denial: getIntentSender/i.test(out)) {
+      return bad(
+        'Android 10 không cho phép tạo hành động chạm mở app qua lệnh shell (lỗi hệ thống uid 1000 của Android 10). Bạn hãy bấm nút "Chỉ mô phỏng lúc chạm" ở ngay bên cạnh để test mở app kèm dữ liệu, hoặc chọn "Không làm gì" nếu chỉ muốn xem hiển thị thông báo.'
+      )
+    }
+    return bad(`Máy không nhận lệnh: ${out.split(/\r?\n/).slice(0, 3).join(' | ')}`)
+  }
   const what = p.tap === 'none' ? 'Chạm vào chỉ đóng thông báo.' : p.tap === 'link' ? 'Chạm vào sẽ mở liên kết trong app.' : 'Chạm vào sẽ mở app kèm dữ liệu đã nhập.'
   return { ok: true, message: `Đã đăng thông báo — kéo thanh thông báo xuống để xem. ${what}` }
 }
