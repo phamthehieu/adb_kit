@@ -21,6 +21,8 @@ export interface AppEl extends Box {
   text: string
   desc: string
   cls: string
+  id?: string
+  clickable?: boolean
 }
 
 export interface Side {
@@ -67,7 +69,9 @@ export function toAppEls(nodes: UiNode[], wPx: number, hPx: number, density: num
     h: r1((n.b[3] - n.b[1]) * hPx * k),
     text: n.text,
     desc: n.desc,
-    cls: n.cls
+    cls: n.cls,
+    id: n.id,
+    clickable: n.clickable
   }))
   return { els, w: r1(wPx * k), h: r1(hPx * k) }
 }

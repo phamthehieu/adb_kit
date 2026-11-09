@@ -31,5 +31,19 @@ describe('Form factors and device presets', () => {
       expect(c.cutout).toMatch(/^com\.android\.internal\.display\.cutout\.emulation\./)
     }
   })
+
+  it('correctly calculates px dimensions from Figma dp dimensions for device density', () => {
+    const figmaW = 393
+    const figmaH = 852
+    const density = 420
+    const factor = density / 160
+    const pxW = Math.round(figmaW * factor)
+    const pxH = Math.round(figmaH * factor)
+    expect(pxW).toBe(1032)
+    expect(pxH).toBe(2237)
+    // Converted back to dp
+    const backDpW = (pxW * 160) / density
+    expect(Math.abs(backDpW - figmaW)).toBeLessThan(0.2)
+  })
 })
 

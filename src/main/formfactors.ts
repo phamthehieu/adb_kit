@@ -121,6 +121,31 @@ export async function resetFormFactor(serial: string): Promise<{ ok: boolean; me
   return { ok: true, message: 'Đã khôi phục kích thước màn hình gốc' }
 }
 
+export async function fitPhoneToFigma(
+  serial: string,
+  widthDp: number,
+  heightDp: number
+): Promise<{ ok: boolean; widthPx: number; heightPx: number; message: string }> {
+  const orig = await recordOriginalIfNeeded(serial)
+  const densOut = (await shell(serial, 'wm density')).stdout
+  const mDens = /Override density:\s*(\d+)/.exec(densOut) ?? /Physical density:\s*(\d+)/.exec(densOut)
+  const density = mDens ? Number(mDens[1]) : (orig.density ?? 420)
+
+  const factor = density / 160
+  const widthPx = Math.round(widthDp * factor)
+  const heightPx = Math.round(heightDp * factor)
+
+  await clearCutouts(serial)
+  await shell(serial, `wm size ${widthPx}x${heightPx}`)
+
+  return {
+    ok: true,
+    widthPx,
+    heightPx,
+    message: `Đã đổi màn hình máy sang ${widthDp}×${heightDp} dp (${widthPx}×${heightPx} px) khớp theo Figma!`
+  }
+}
+
 export async function scanMatrix(
   serial: string,
   onProgress?: (step: number, total: number, name: string) => void

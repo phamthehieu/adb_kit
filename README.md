@@ -137,6 +137,7 @@ Tab **So với Figma**: so một phần tử trên máy thật với node tươn
 Lưu ý:
 
 - Không so toạ độ tuyệt đối, vì thiết kế thường vẽ trên khung iPhone (393×852, status bar 50) còn máy thật có kích thước khác. Nếu chiều rộng lệch nhưng hai mép trái/phải khớp, app ghi "giãn theo màn" chứ không báo lỗi. Với chữ, khung TextView thường giãn hết chiều ngang nên độ rộng chỉ được ghi chú, không tính là lỗi.
+- **Khớp cỡ máy theo Figma**: nút **"Khớp cỡ máy (W×H)"** và checkbox **"Tự khớp"** tự động tính toán độ phân giải theo mật độ DPI của máy (`wm size`) để ép màn hình điện thoại thật khớp 100% kích thước dp của frame Figma đang chọn, giúp so sánh pixel-perfect 1:1 không lo lệch tỷ lệ. App tự động khôi phục kích thước gốc khi thoát tab hoặc bấm nút Khôi phục.
 - Các thanh hệ thống vẽ trong thiết kế (Status Bar, Home Indicator, bàn phím) không được dùng làm phần tử kế bên.
 - App Jetpack Compose không có `resource-id`, nên app ghép cặp theo chữ. Nếu dev bật `testTagsAsResourceId` và đặt `testTag` trùng tên layer Figma thì sẽ ghép chính xác hơn (chưa dùng ở bản này).
 

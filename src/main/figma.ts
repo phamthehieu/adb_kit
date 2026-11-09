@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FNode, FPage, FPageRef, FScreen } from '../shared/figma'
 
@@ -40,18 +40,36 @@ export function setToken(token: string): void {
   writeFileSync(tokenFile(), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(t) : Buffer.from(t, 'utf8'))
 }
 
-async function api<T>(path: string, timeoutMs = 240_000): Promise<T> {
+async function api<T>(path: string, timeoutMs = 240_000, retries = 2): Promise<T> {
   const token = getToken()
   if (!token) throw new Error('Chưa nhập Figma token')
-  const res = await fetch(API + path, { headers: { 'X-Figma-Token': token }, signal: AbortSignal.timeout(timeoutMs) })
-  if (!res.ok) {
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(API + path, { headers: { 'X-Figma-Token': token }, signal: AbortSignal.timeout(timeoutMs) })
+    if (res.ok) {
+      return (await res.json()) as T
+    }
+
+    if (res.status === 429) {
+      const retryAfterHeader = res.headers.get('retry-after')
+      const waitSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : Math.min(30, Math.pow(2, attempt + 1) * 3)
+      const validWait = isNaN(waitSec) || waitSec <= 0 ? 5 : waitSec
+
+      if (attempt < retries && validWait <= 30) {
+        // Tự động chờ và thử lại
+        await new Promise((r) => setTimeout(r, validWait * 1000))
+        continue
+      }
+      throw new Error(`Figma đang giới hạn số lần gọi (429). Vui lòng đợi khoảng ${validWait} giây rồi thử lại.`)
+    }
+
     const body = await res.text().catch(() => '')
     if (res.status === 403) throw new Error('Figma từ chối (403): token sai/hết hạn, hoặc tài khoản không có quyền xem file này')
     if (res.status === 404) throw new Error('Không tìm thấy file / node trên Figma (404)')
-    if (res.status === 429) throw new Error('Figma đang giới hạn số lần gọi (429), thử lại sau ít phút')
     throw new Error(`Figma lỗi ${res.status}: ${body.slice(0, 200)}`)
   }
-  return (await res.json()) as T
+
+  throw new Error('Figma đang bận, vui lòng thử lại sau.')
 }
 
 /* ------------------------------------------------------------- reduce tree */
@@ -86,7 +104,8 @@ const hex = (c: { r: number; g: number; b: number }): string =>
 
 function isScreen(n: RawNode): boolean {
   const b = n.absoluteBoundingBox
-  return CONTAINERS.has(n.type) && !!b && b.width >= 320 && b.width <= 480 && b.height >= 560
+  // Accept any frame / component / container with valid dimensions without size restriction.
+  return CONTAINERS.has(n.type) && !!b && b.width > 0 && b.height > 0
 }
 
 /** Is a node only decoration made of paths (illustration, logo)? Collapse it to one leaf. */
@@ -164,9 +183,29 @@ export function screensOf(doc: RawNode): FScreen[] {
 
 /* ------------------------------------------------------------------ public */
 
-export async function listPages(fileKey: string): Promise<{ fileName: string; pages: FPageRef[] }> {
+const pagesCachePath = (fileKey: string): string => join(cacheDir(), `${safe(fileKey)}_pages.json`)
+
+export async function listPages(fileKey: string, refresh = false): Promise<{ fileName: string; pages: FPageRef[] }> {
+  const cp = pagesCachePath(fileKey)
+  if (!refresh && existsSync(cp)) {
+    try {
+      const stat = statSync(cp)
+      if (Date.now() - stat.mtimeMs < 2 * 3600_000) {
+        return JSON.parse(readFileSync(cp, 'utf8')) as { fileName: string; pages: FPageRef[] }
+      }
+    } catch {
+      /* fetch again */
+    }
+  }
   const r = await api<{ name: string; document: RawNode }>(`/files/${fileKey}?depth=1`, 60_000)
-  return { fileName: r.name, pages: (r.document.children ?? []).map((p) => ({ id: p.id, name: p.name })) }
+  const result = { fileName: r.name, pages: (r.document.children ?? []).map((p) => ({ id: p.id, name: p.name })) }
+  try {
+    mkdirSync(cacheDir(), { recursive: true })
+    writeFileSync(cp, JSON.stringify(result), 'utf8')
+  } catch {
+    /* non-fatal */
+  }
+  return result
 }
 
 const cachePath = (fileKey: string, nodeId: string): string => join(cacheDir(), `${safe(fileKey)}_${safe(nodeId)}.json`)
@@ -184,9 +223,21 @@ export async function loadPage(fileKey: string, nodeId: string, refresh: boolean
   const r = await api<{ name: string; lastModified: string; nodes: Record<string, { document: RawNode } | null> }>(
     `/files/${fileKey}/nodes?ids=${encodeURIComponent(nodeId)}`
   )
-  const doc = r.nodes[nodeId]?.document
+  const doc = r.nodes[nodeId]?.document ?? r.nodes[nodeId.replace(':', '-')]?.document ?? Object.values(r.nodes)[0]?.document
   if (!doc) throw new Error(`Không thấy node ${nodeId} trong file`)
-  const screens = screensOf(doc)
+  let screens = screensOf(doc)
+  // If no inner screens were found, but doc itself has a bounding box, treat it as a screen directly!
+  if (!screens.length && doc.absoluteBoundingBox) {
+    screens = [reduceScreen(doc, '')]
+  }
+  // If still no screens, add any child that has a bounding box!
+  if (!screens.length && doc.children) {
+    for (const c of doc.children) {
+      if (c.absoluteBoundingBox) {
+        screens.push(reduceScreen(c, ''))
+      }
+    }
+  }
   const page: FPage = {
     fileKey,
     fileName: r.name,

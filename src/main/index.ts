@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell as eShell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell as eShell } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve as resolvePath } from 'node:path'
 import { adb, adbBinary, adbPath, adbVersion, deviceDetails, installPlatformTools, listDevices, q, setOwnToolsDir, shell } from './adb'
@@ -43,7 +43,7 @@ import { appLinks, openActivity } from './applinks'
 import { Explorer, type ExploreOptions } from './explore'
 import type { JiraConf } from '../shared/jira'
 import { cutNetwork, getConfig, restoreConfig, setAppLocale, setConfig } from './devconf'
-import { applyFormFactor, getAvailableCutouts, resetFormFactor, scanMatrix } from './formfactors'
+import { applyFormFactor, fitPhoneToFigma, getAvailableCutouts, resetFormFactor, scanMatrix } from './formfactors'
 import { clearAllLocations, clearLocation, gpsActive, moveRoute, searchPlace, setLocation, setupMapRequests } from './gps'
 import type { ConfKey } from '../shared/devconf'
 import { parseCsv, type FreshMode, type FreshPerms, type MockRule, type NetCall, type NetProfile, type RunOptions, type Script, type Suite } from '../shared/automation'
@@ -75,7 +75,12 @@ const jarPath = app.isPackaged
 /* ---------------------------------------------------------- device polling */
 
 let lastDevices = ''
+let polling = false
 async function pollDevices(): Promise<void> {
+  // While USB mode switches (e.g. tethering toggled) `adb devices` can hang up to its
+  // timeout; never stack another adb.exe on top of a poll that is still running.
+  if (polling) return
+  polling = true
   try {
     const list = await listDevices()
     const json = JSON.stringify(list)
@@ -85,6 +90,8 @@ async function pollDevices(): Promise<void> {
     }
   } catch {
     /* adb server restarting; try again next tick */
+  } finally {
+    polling = false
   }
 }
 // The headless CLI run has no window: don't poll devices for it.
@@ -429,6 +436,24 @@ function registerInspectIpc(): void {
 }
 
 function registerFigmaIpc(): void {
+  ipcMain.handle('clipboard:read-image', async () => {
+    try {
+      const items = await clipboard.read()
+      for (const item of items) {
+        const type = item.types.find((t) => t.startsWith('image/'))
+        if (type) {
+          const res = await item.getType(type)
+          if (res && typeof (res as Blob).arrayBuffer === 'function') {
+            const buf = Buffer.from(await (res as Blob).arrayBuffer())
+            return `data:${type};base64,${buf.toString('base64')}`
+          }
+        }
+      }
+    } catch {
+      /* fallback */
+    }
+    return null
+  })
   ipcMain.handle('figma:has-token', () => !!getToken())
   ipcMain.handle('figma:set-token', (_e, token: string) => setToken(token))
   ipcMain.handle('figma:pages', (_e, fileKey: string) => listPages(fileKey))
@@ -440,6 +465,8 @@ function registerFigmaIpc(): void {
     const m = /Override density:\s*(\d+)/.exec(out) ?? /Physical density:\s*(\d+)/.exec(out)
     return m ? Number(m[1]) : 160
   })
+  ipcMain.handle('figma:fit-screen', (_e, serial: string, wDp: number, hDp: number) => fitPhoneToFigma(serial, wDp, hDp))
+  ipcMain.handle('figma:reset-screen', (_e, serial: string) => resetFormFactor(serial))
 }
 
 function registerMiniAppIpc(): void {

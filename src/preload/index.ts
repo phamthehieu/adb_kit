@@ -213,12 +213,16 @@ const api = {
     openSettings: (serial: string, pkg: string): Promise<CmdResult> => invoke('perm:settings', serial, pkg)
   },
   figma: {
+    clipboardReadImage: (): Promise<string | null> => invoke('clipboard:read-image'),
     hasToken: (): Promise<boolean> => invoke('figma:has-token'),
     setToken: (token: string): Promise<void> => invoke('figma:set-token', token),
     pages: (fileKey: string): Promise<{ fileName: string; pages: FPageRef[] }> => invoke('figma:pages', fileKey),
     load: (fileKey: string, nodeId: string, refresh = false): Promise<FPage> => invoke('figma:load', fileKey, nodeId, refresh),
     image: (fileKey: string, nodeId: string): Promise<Uint8Array> => invoke('figma:image', fileKey, nodeId),
-    density: (serial: string): Promise<number> => invoke('device:density', serial)
+    density: (serial: string): Promise<number> => invoke('device:density', serial),
+    fitScreen: (serial: string, wDp: number, hDp: number): Promise<{ ok: boolean; widthPx: number; heightPx: number; message: string }> =>
+      invoke('figma:fit-screen', serial, wDp, hDp),
+    resetScreen: (serial: string): Promise<{ ok: boolean; message: string }> => invoke('figma:reset-screen', serial)
   },
   crash: {
     watch: (serial: string | null): Promise<void> => invoke('crash:watch', serial),
