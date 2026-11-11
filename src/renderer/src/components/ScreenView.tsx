@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import type { MirrorOptions, MirrorStatus } from '@shared/types'
 import { H264Player } from '../lib/player'
-import { Action, Key, Msg, displayPower, scroll, sendKey as rawSendKey, setClipboard, simple, text, touch } from '../lib/control'
+import { Action, Key, Msg, displayPower, getClipboard, keycode, scroll, sendKey as rawSendKey, setClipboard, simple, text, touch } from '../lib/control'
 import { autoStore, emitAction, inspectAt, record, useAutoState } from '../lib/automation'
 import { MaskLayer } from './MaskLayer'
 import { attachRolling, detachRolling } from '../lib/rollingVideo'
@@ -41,6 +41,29 @@ const KEY_NAMES: Record<number, string> = {
   [Key.MOVE_END]: 'Move end',
   [Key.PAGE_UP]: 'Page up',
   [Key.PAGE_DOWN]: 'Page down'
+}
+
+// Android KeyEvent meta flags (SHIFT_ON|SHIFT_LEFT_ON, CTRL_ON|CTRL_LEFT_ON) and letter keycodes.
+const META_SHIFT = 0x41
+const META_CTRL = 0x3000
+const KEYCODE_A = 29
+const KEYCODE_Z = 54
+
+/** Press a key with modifiers held. Not recorded: scripts only store plain keys. */
+function sendKeyMeta(code: number, meta: number): void {
+  window.api.mirror.control(keycode(Action.Down, code, meta))
+  window.api.mirror.control(keycode(Action.Up, code, meta))
+}
+
+/**
+ * Type text on the phone. InjectText only handles plain ASCII (Android must map each char to a
+ * key), so anything else (Vietnamese letters…) is pasted through the phone's clipboard.
+ */
+function typeText(s: string): void {
+  if (!s) return
+  window.api.mirror.control(/^[\x20-\x7e]*$/.test(s) ? text(s) : setClipboard(s, true))
+  emitAction()
+  record({ type: 'text', text: s })
 }
 
 /** Send a key and, when recording, add it to the script. */
@@ -93,6 +116,7 @@ export function ScreenView(props: Props) {
   const { serial, options, compact, width, screenOff, onToggleScreenOff, status, onStatus, onOpenInstall, onDropFiles } = props
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
+  const phoneRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<H264Player | null>(null)
   const pressed = useRef(false)
   const [mirror, setMirror] = useState<MirrorStatus>({ state: 'idle' })
@@ -171,7 +195,7 @@ export function ScreenView(props: Props) {
       playerRef.current = null
       void window.api.mirror.stop() // scrcpy-server turns the display back on when it exits
     }
-  }, [serial, options.maxSize, options.bitRate, options.maxFps, restartKey, reapplyScreenOff])
+  }, [serial, options.maxSize, options.bitRate, options.maxFps, options.clipboardSync, options.showTouches, options.powerOffOnClose, restartKey, reapplyScreenOff])
 
   // Toggling the setting while mirroring.
   useEffect(() => {
@@ -213,6 +237,18 @@ export function ScreenView(props: Props) {
 
   const gesture = useRef<{ x: number; y: number; t: number } | null>(null)
 
+  // Android only draws "show touches" dots for real finger touches, never for the clicks we
+  // inject from the PC, so draw our own dot on the mirror (moved directly, no re-render).
+  const dotRef = useRef<HTMLDivElement>(null)
+  const moveDot = (e: React.PointerEvent<HTMLCanvasElement>, down: boolean): void => {
+    const dot = dotRef.current
+    const box = e.currentTarget.parentElement?.getBoundingClientRect()
+    if (!dot || !box) return
+    dot.style.left = `${e.clientX - box.left}px`
+    dot.style.top = `${e.clientY - box.top}px`
+    dot.classList.toggle('on', down)
+  }
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>): void => {
     e.currentTarget.parentElement?.focus()
     if (e.button === 2) return sendKey(Key.BACK) // right click = back (like scrcpy)
@@ -225,16 +261,19 @@ export function ScreenView(props: Props) {
     pressed.current = true
     gesture.current = { x: d.x / d.w, y: d.y / d.h, t: performance.now() }
     e.currentTarget.setPointerCapture(e.pointerId)
+    moveDot(e, true)
     window.api.mirror.control(touch(Action.Down, d.x, d.y, d.w, d.h))
   }
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>): void => {
     if (!pressed.current) return
+    moveDot(e, true)
     const d = toDevice(e)
     if (d) window.api.mirror.control(touch(Action.Move, d.x, d.y, d.w, d.h))
   }
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>): void => {
     if (!pressed.current) return
     pressed.current = false
+    moveDot(e, false)
     const d = toDevice(e)
     if (!d) return
     window.api.mirror.control(touch(Action.Up, d.x, d.y, d.w, d.h))
@@ -271,18 +310,67 @@ export function ScreenView(props: Props) {
       })
       return
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) return
+    // Ctrl+C / Ctrl+X: copy (or cut) the phone's current selection onto the PC clipboard.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && ['c', 'x'].includes(e.key.toLowerCase())) {
+      e.preventDefault()
+      window.api.mirror.control(getClipboard(e.key.toLowerCase() === 'x' ? 'cut' : 'copy'))
+      return
+    }
+    if (e.altKey) return
+    const ctrl = e.ctrlKey || e.metaKey
+    const meta = (e.shiftKey ? META_SHIFT : 0) | (ctrl ? META_CTRL : 0)
+    // Windows-style editing shortcuts, sent to the phone as real key events with modifiers.
+    if (ctrl) {
+      const k = e.key.toLowerCase()
+      let code: number | undefined
+      let m = meta
+      if (k === 'a') code = KEYCODE_A
+      else if (k === 'z') code = KEYCODE_Z // Ctrl+Z undo, Ctrl+Shift+Z redo
+      else if (k === 'y') {
+        code = KEYCODE_Z // Ctrl+Y = redo
+        m = META_CTRL | META_SHIFT
+      } else code = KEYMAP[e.key] // Ctrl+←/→ word, Ctrl+Home/End, Ctrl+Backspace/Delete…
+      if (code === undefined) return
+      e.preventDefault()
+      sendKeyMeta(code, m)
+      return
+    }
     const code = KEYMAP[e.key]
     if (code !== undefined) {
       e.preventDefault()
-      sendKey(code)
+      // Shift+arrows/Home/End select text; plain keys keep being recorded for scripts.
+      if (meta) sendKeyMeta(code, meta)
+      else sendKey(code)
     } else if (e.key.length === 1) {
       e.preventDefault()
-      window.api.mirror.control(text(e.key))
-      emitAction()
-      record({ type: 'text', text: e.key })
+      typeText(e.key)
     }
+    // Any other key (e.g. "Process" / "Unidentified" from an IME or Unikey's unicode packets)
+    // is deliberately left alone: the text arrives through beforeinput / compositionend below.
   }
+
+  // Text that keydown cannot see: IME composition (Windows Vietnamese keyboard) and unicode
+  // key packets. The .phone element is an editing host only so the browser emits these events;
+  // the DOM is never changed (every beforeinput is cancelled).
+  useEffect(() => {
+    const el = phoneRef.current
+    if (!el) return
+    const onBefore = (ev: Event): void => {
+      const e = ev as InputEvent
+      e.preventDefault()
+      if (locked || e.isComposing) return
+      if (e.inputType === 'insertText' && e.data) typeText(e.data)
+    }
+    const onCompEnd = (ev: Event): void => {
+      if (!locked) typeText((ev as CompositionEvent).data)
+    }
+    el.addEventListener('beforeinput', onBefore)
+    el.addEventListener('compositionend', onCompEnd)
+    return () => {
+      el.removeEventListener('beforeinput', onBefore)
+      el.removeEventListener('compositionend', onCompEnd)
+    }
+  }, [locked])
 
   /* ------------------------------------------------------------ actions */
 
@@ -394,7 +482,11 @@ export function ScreenView(props: Props) {
 
           <div
             className={`phone ${dragOver ? 'drop' : ''} ${auto.inspecting ? 'inspecting' : ''} ${auto.recording ? 'recording' : ''}`}
+            ref={phoneRef}
             tabIndex={0}
+            contentEditable="plaintext-only"
+            suppressContentEditableWarning
+            spellCheck={false}
             onKeyDown={onKeyDown}
             onDragOver={(e) => {
               e.preventDefault()
@@ -416,6 +508,7 @@ export function ScreenView(props: Props) {
               onContextMenu={(e) => e.preventDefault()}
               onAuxClick={(e) => e.preventDefault()}
             />
+            {options.showTouches === true && <div ref={dotRef} className="touch-dot" />}
             {auto.highlight && (
               <div
                 className="hl"

@@ -100,10 +100,55 @@ if (!process.argv.includes('--run')) setInterval(pollDevices, 1500)
 /* -------------------------------------------------------------- mirroring */
 
 let mirror: ScrcpySession | null = null
+let mirrorOpts: MirrorOptions | null = null
 const setStatus = (s: MirrorStatus): void => send('mirror:status', s)
+
+// "Show touches" and "sleep on close" are done with adb, never as scrcpy-server arguments:
+// as server args they crashed the Samsung S9's H.264 encoder (see scrcpy.ts).
+const stress = new Stress(new StressStore(join(app.getPath('userData'), 'stress-state.json')))
+/** Serial of the phone whose "show touches" this mirror switched on (so we switch it back). */
+let touchesOnFor: string | null = null
+
+async function applyMirrorExtras(serial: string, opts: MirrorOptions): Promise<void> {
+  try {
+    if (opts.showTouches === true && touchesOnFor !== serial) {
+      if ((await stress.apply(serial, 'touches', 'on')).ok) touchesOnFor = serial
+    } else if (opts.showTouches !== true && touchesOnFor === serial) {
+      await stress.apply(serial, 'touches', 'off') // restores the value recorded before we changed it
+      touchesOnFor = null
+    }
+  } catch {
+    /* cosmetic option: never let it break the mirror */
+  }
+}
+
+/** The user closed the mirror (not a restart): undo show-touches and optionally sleep the phone. */
+async function endMirror(): Promise<void> {
+  const serial = mirror?.serial ?? null
+  const opts = mirrorOpts
+  stopMirror()
+  if (!serial) return
+  // The renderer also calls stop() right before every restart (new bitrate, rotation…). If a new
+  // session begins straight away this is not a real close: leave the phone alone.
+  await new Promise((r) => setTimeout(r, 800))
+  if (mirror) return
+  try {
+    if (touchesOnFor === serial) {
+      await stress.apply(serial, 'touches', 'off')
+      touchesOnFor = null
+    }
+    if (opts?.powerOffOnClose === true) {
+      const w = await shell(serial, 'dumpsys power | grep -m1 mWakefulness=', 8000)
+      if (/mWakefulness=Awake/.test(w.stdout)) await shell(serial, 'input keyevent 223', 8000) // KEYCODE_SLEEP
+    }
+  } catch {
+    /* best effort */
+  }
+}
 
 async function startMirror(serial: string, opts: MirrorOptions): Promise<void> {
   stopMirror()
+  mirrorOpts = opts
   const session = new ScrcpySession(serial, jarPath, opts)
   mirror = session
   setStatus({ state: 'starting', serial })
@@ -115,6 +160,9 @@ async function startMirror(serial: string, opts: MirrorOptions): Promise<void> {
   session.on('ready', (name) => {
     if (mirror === session) setStatus({ state: 'running', serial, deviceName: name })
   })
+  session.on('clipboard', async (text) => {
+    if (mirror === session && text && (await clipboard.readText()) !== text) await clipboard.writeText(text)
+  })
   session.on('closed', (reason) => {
     if (mirror !== session) return
     mirror = null
@@ -122,6 +170,7 @@ async function startMirror(serial: string, opts: MirrorOptions): Promise<void> {
   })
   try {
     await session.start()
+    if (mirror === session) void applyMirrorExtras(serial, opts)
   } catch (e) {
     session.close((e as Error).message)
   }
@@ -619,7 +668,6 @@ function registerJiraIpc(): void {
 /** Test-bench tools: manual KBKT testing with evidence, saved app states, and durability ("độ bền") tests. */
 function registerToolsIpc(): void {
   const states = stateStore()
-  const stress = new Stress(new StressStore(join(app.getPath('userData'), 'stress-state.json')))
   const modelOf = async (serial: string): Promise<string> => (await listDevices()).find((d) => d.serial === serial)?.model ?? serial
 
   // Manual testing with evidence
@@ -814,7 +862,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('mirror:start', (_e, serial: string, opts: MirrorOptions) => startMirror(serial, opts))
-  ipcMain.handle('mirror:stop', () => stopMirror())
+  ipcMain.handle('mirror:stop', () => endMirror())
   ipcMain.on('mirror:control', (_e, bytes: Uint8Array) => mirror?.sendControl(bytes))
 
   // Auto-rotate would immediately undo a manual rotation (the phone lying flat reads as portrait),
@@ -909,7 +957,20 @@ function createWindow(): void {
 
 const cli = parseCli(process.argv)
 
+// Only one GUI instance per user-data folder. Two copies (e.g. the installed app and a dev
+// build) would both mirror the same phone and start two video encoders at once, which
+// crashes Samsung's H.264 encoder (SIGABRT in ACodec) and freezes the mirror.
+const gotLock = cli ? true : app.requestSingleInstanceLock()
+if (!gotLock) app.quit()
+else
+  app.on('second-instance', () => {
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  })
+
 app.whenReady().then(async () => {
+  if (!gotLock) return
   setBaselinesRoot(join(app.getPath('documents'), 'ADB Kit', 'baselines'))
   if (cli) {
     // Headless run (CI / scheduled): no window, exit code tells the result.
@@ -921,7 +982,15 @@ app.whenReady().then(async () => {
   createWindow()
 })
 
-app.on('before-quit', () => {
+let quitCleaned = false
+app.on('before-quit', (e) => {
+  // Give the phone its settings back (and sleep it if asked) before the process exits.
+  if (!quitCleaned && mirror && (touchesOnFor || mirrorOpts?.powerOffOnClose)) {
+    e.preventDefault()
+    quitCleaned = true
+    void endMirror().finally(() => app.quit())
+    return
+  }
   runner?.stop()
   suiteRunner?.stop()
   void liveNet?.stop()

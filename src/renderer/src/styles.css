@@ -131,7 +131,14 @@ select.input { padding-right: 4px; }
   border-radius: 22px; padding: 6px; background: #000;
   box-shadow: 0 0 0 1px #2a2f38, 0 20px 60px rgba(0, 0, 0, .6);
   display: flex; outline: none;
+  caret-color: transparent; user-select: none; /* editing host only to receive IME/unicode input */
 }
+.touch-dot {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+  background: rgba(255, 255, 255, .3); border: 2px solid rgba(255, 255, 255, .85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); pointer-events: none; opacity: 0; transition: opacity .25s ease-out;
+}
+.touch-dot.on { opacity: 1; transition: none; }
 .phone:focus-visible { box-shadow: 0 0 0 1px var(--accent), 0 20px 60px rgba(0, 0, 0, .6); }
 .phone canvas { border-radius: 16px; display: block; background: #050607; cursor: default; touch-action: none; }
 .phone.drop { box-shadow: 0 0 0 2px var(--accent); }

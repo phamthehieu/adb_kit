@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { Socket, connect } from 'node:net'
+import { appendFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { adb, adbSpawn } from './adb'
 import type { MirrorOptions, VideoPacket } from '../shared/types'
@@ -66,6 +69,15 @@ function openSocket(port: number): Promise<Socket> {
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
+/** Temporary diagnostics for phone → PC clipboard sync: sizes and types only, never content. */
+function clipLog(msg: string): void {
+  try {
+    appendFileSync(join(tmpdir(), 'adbkit-clipboard.log'), `${new Date().toISOString()} ${msg}\n`)
+  } catch {
+    /* diagnostics only */
+  }
+}
+
 const t0 = Date.now()
 function dbg(msg: string): void {
   if (process.env.ADBKIT_DEBUG) console.log(`[scrcpy +${Date.now() - t0}ms] ${msg}`)
@@ -75,6 +87,8 @@ export interface ScrcpyEvents {
   video: [VideoPacket]
   ready: [string]
   closed: [string | null]
+  /** Text the phone's clipboard changed to (only when clipboard sync is on). */
+  clipboard: [string]
 }
 
 /**
@@ -143,8 +157,10 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
       `video_bit_rate=${this.opts.bitRate}`,
       `max_fps=${this.opts.maxFps}`,
       'stay_awake=true',
-      'clipboard_autosync=false'
+      `clipboard_autosync=${this.opts.clipboardSync === true}`
     ]
+    // Do NOT add show_touches / power_off_on_close here: on the Samsung S9 (Android 10) they
+    // made the H.264 encoder abort (SIGABRT in ACodec::reconfigEncoder4OtherApps) every time.
     this.proc = adbSpawn([
       '-s', s, 'shell',
       `CLASSPATH=${REMOTE_JAR} app_process / com.genymobile.scrcpy.Server ${SCRCPY_VERSION} ${args.join(' ')}`
@@ -186,8 +202,8 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
     }
 
     this.control = await openSocket(this.port)
-    this.control.on('data', () => {}) // device -> client messages (clipboard, ...) are ignored
     this.control.on('error', () => {})
+    void this.readDeviceMessages(new ByteReader(this.control))
 
     const nameBuf = await reader.read(64)
     const deviceName = nameBuf.subarray(0, Math.max(0, nameBuf.indexOf(0))).toString('utf8') || s
@@ -197,6 +213,34 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
     dbg('ready ' + deviceName)
     this.emit('ready', deviceName)
     void this.pump(reader)
+  }
+
+  /** Device → client messages on the control socket: 0 = clipboard, 1 = clipboard ack, 2 = UHID output. */
+  private async readDeviceMessages(r: ByteReader): Promise<void> {
+    try {
+      while (!this.closed) {
+        const type = (await r.read(1))[0]
+        clipLog(`device message type=${type}`)
+        if (type === 0) {
+          const len = (await r.read(4)).readUInt32BE(0)
+          clipLog(`clipboard len=${len}`)
+          // An absurd size means framing was lost; stop rather than allocate.
+          if (len > 4 * 1024 * 1024) throw new Error('clipboard message too large')
+          this.emit('clipboard', (await r.read(len)).toString('utf8'))
+        } else if (type === 1) {
+          await r.read(8)
+        } else if (type === 2) {
+          const h = await r.read(4)
+          await r.read(h.readUInt16BE(2))
+        } else {
+          throw new Error('unknown device message ' + type)
+        }
+      }
+    } catch (e) {
+      clipLog(`reader stopped: ${(e as Error).message}`)
+      /* Framing lost: keep draining so the device never blocks on a full control socket. */
+      this.control?.on('data', () => {})
+    }
   }
 
   private async pump(reader: ByteReader): Promise<void> {

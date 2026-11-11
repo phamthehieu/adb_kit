@@ -10,6 +10,7 @@ export enum Msg {
   ExpandNotifications = 5,
   ExpandSettings = 6,
   CollapsePanels = 7,
+  GetClipboard = 8,
   SetClipboard = 9,
   SetDisplayPower = 10,
   RotateDevice = 11,
@@ -97,6 +98,14 @@ export function text(s: string): Uint8Array {
   out.set(t, 5)
   return out
 }
+
+/**
+ * Ask the phone for its clipboard. With `copy`/`cut` the server first presses COPY/CUT on the
+ * focused field (so the current selection is what comes back); the reply arrives as a
+ * device message and the main process puts it on the PC clipboard.
+ */
+export const getClipboard = (key: 'none' | 'copy' | 'cut' = 'none'): Uint8Array =>
+  new Uint8Array([Msg.GetClipboard, key === 'copy' ? 1 : key === 'cut' ? 2 : 0])
 
 export function setClipboard(s: string, paste: boolean): Uint8Array {
   const t = enc.encode(s)

@@ -117,7 +117,7 @@ function ConnectButton() {
 
 function SettingsButton({ options, onOptions }: { options: MirrorOptions; onOptions: (o: MirrorOptions) => void }) {
   const [open, setOpen, ref] = usePopover()
-  const sel = <K extends keyof MirrorOptions>(k: K, label: string, values: [number, string][]) => (
+  const sel = <K extends 'maxSize' | 'bitRate' | 'maxFps'>(k: K, label: string, values: [number, string][]) => (
     <label className="field">
       {label}
       <select className="input" value={options[k]} onChange={(e) => onOptions({ ...options, [k]: Number(e.target.value) })}>
@@ -138,6 +138,30 @@ function SettingsButton({ options, onOptions }: { options: MirrorOptions; onOpti
           {sel('maxSize', 'Độ phân giải tối đa (cạnh dài)', [[720, '720p'], [1024, '1024'], [1280, '1280'], [1600, '1600'], [1920, '1920'], [0, 'Gốc']])}
           {sel('bitRate', 'Bitrate', [[2_000_000, '2 Mbps'], [4_000_000, '4 Mbps'], [8_000_000, '8 Mbps'], [16_000_000, '16 Mbps']])}
           {sel('maxFps', 'FPS tối đa', [[30, '30'], [60, '60'], [90, '90'], [120, '120']])}
+          <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={options.clipboardSync === true}
+              onChange={(e) => onOptions({ ...options, clipboardSync: e.target.checked })}
+            />
+            Đồng bộ clipboard điện thoại → PC
+          </label>
+          <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={options.showTouches === true}
+              onChange={(e) => onOptions({ ...options, showTouches: e.target.checked })}
+            />
+            Hiện điểm chạm (chấm trên mirror + trên điện thoại khi chạm tay thật)
+          </label>
+          <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={options.powerOffOnClose === true}
+              onChange={(e) => onOptions({ ...options, powerOffOnClose: e.target.checked })}
+            />
+            Tắt màn hình điện thoại khi đóng mirror
+          </label>
           <div className="note">Đổi giá trị sẽ khởi động lại mirror.</div>
         </div>
       )}
