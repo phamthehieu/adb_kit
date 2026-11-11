@@ -1,8 +1,5 @@
 import { EventEmitter } from 'node:events'
 import { Socket, connect } from 'node:net'
-import { appendFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { adb, adbSpawn } from './adb'
 import type { MirrorOptions, VideoPacket } from '../shared/types'
@@ -68,15 +65,6 @@ function openSocket(port: number): Promise<Socket> {
 }
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
-
-/** Temporary diagnostics for phone → PC clipboard sync: sizes and types only, never content. */
-function clipLog(msg: string): void {
-  try {
-    appendFileSync(join(tmpdir(), 'adbkit-clipboard.log'), `${new Date().toISOString()} ${msg}\n`)
-  } catch {
-    /* diagnostics only */
-  }
-}
 
 const t0 = Date.now()
 function dbg(msg: string): void {
@@ -220,10 +208,8 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
     try {
       while (!this.closed) {
         const type = (await r.read(1))[0]
-        clipLog(`device message type=${type}`)
         if (type === 0) {
           const len = (await r.read(4)).readUInt32BE(0)
-          clipLog(`clipboard len=${len}`)
           // An absurd size means framing was lost; stop rather than allocate.
           if (len > 4 * 1024 * 1024) throw new Error('clipboard message too large')
           this.emit('clipboard', (await r.read(len)).toString('utf8'))
@@ -236,8 +222,7 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
           throw new Error('unknown device message ' + type)
         }
       }
-    } catch (e) {
-      clipLog(`reader stopped: ${(e as Error).message}`)
+    } catch {
       /* Framing lost: keep draining so the device never blocks on a full control socket. */
       this.control?.on('data', () => {})
     }
