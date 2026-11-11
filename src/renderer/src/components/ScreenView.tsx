@@ -126,6 +126,7 @@ export function ScreenView(props: Props) {
   const [restartKey, setRestartKey] = useState(0)
   const [dims, setDims] = useState({ w: 1080, h: 2220 }) // device stream size
   const [box, setBox] = useState({ w: 0, h: 0 }) // space available for the phone
+  const [zoom, setZoom] = useState(1) // 1 = fit the window; Ctrl+wheel or the buttons change it
   const [rotating, setRotating] = useState(false)
   const auto = useAutoState()
   /** Manual input is locked while a test drives the device (unless the tester allowed it). */
@@ -210,7 +211,33 @@ export function ScreenView(props: Props) {
     return () => ro.disconnect()
   }, [])
 
-  const scale = box.w && box.h ? Math.min((box.w - SIDES - 2 * BEZEL) / dims.w, (box.h - 2 * BEZEL) / dims.h) : 0
+  const fit = box.w && box.h ? Math.min((box.w - SIDES - 2 * BEZEL) / dims.w, (box.h - 2 * BEZEL) / dims.h) : 0
+  const scale = fit * zoom
+
+  // Ctrl + wheel zooms the mirror (native listener: React's wheel handler is passive, and the
+  // browser would otherwise zoom the whole page).
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const onWheelZoom = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      setZoom((z) => Math.min(4, Math.max(0.5, +(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)).toFixed(3))))
+    }
+    el.addEventListener('wheel', onWheelZoom, { passive: false })
+    return () => el.removeEventListener('wheel', onWheelZoom)
+  }, [])
+  const dpr = window.devicePixelRatio || 1
+
+  // Ctrl + / Ctrl − / Ctrl 0 (forwarded by the main process) zoom the mirror.
+  useEffect(
+    () =>
+      window.api.mirror.onZoom((dir) =>
+        setZoom((z) => (dir === 'reset' ? 1 : Math.min(4, Math.max(0.5, +(dir === 'in' ? z * 1.25 : z / 1.25).toFixed(3)))))
+      ),
+    []
+  )
   const cssW = Math.max(0, Math.floor(dims.w * scale))
   const cssH = Math.max(0, Math.floor(dims.h * scale))
   const landscape = dims.w > dims.h
@@ -462,10 +489,14 @@ export function ScreenView(props: Props) {
       {running && (
         <div className="fps">
           {screenOff && <span className="badge">màn hình máy đang tắt</span>}
+          <button className="zoom-btn" title="Thu nhỏ (Ctrl + lăn chuột xuống)" onClick={() => setZoom((z) => Math.max(0.5, +(z / 1.25).toFixed(3)))}>−</button>
+          <button className="zoom-btn" title="Vừa khung cửa sổ" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
+          <button className="zoom-btn" title="Phóng to (Ctrl + lăn chuột lên)" onClick={() => setZoom((z) => Math.min(4, +(z * 1.25).toFixed(3)))}>+</button>
+          <button className="zoom-btn" title="Kích thước thật: mỗi điểm ảnh video = một điểm ảnh màn hình PC" onClick={() => fit > 0 && setZoom(Math.min(4, Math.max(0.5, 1 / dpr / fit)))}>1:1</button>
           {fps > 0 ? `${fps} fps` : 'đứng yên'}
         </div>
       )}
-      <div className="screen-box" ref={boxRef}>
+      <div className={`screen-box ${zoom !== 1 ? 'zoomed' : ''}`} ref={boxRef}>
         <div className="side">
           <button className="iconbtn" title="Cài APK" onClick={onOpenInstall}><PackagePlus size={15} /></button>
           <button className="iconbtn" title="Chụp màn hình" onClick={screenshot}><Camera size={15} /></button>

@@ -124,6 +124,11 @@ select.input { padding-right: 4px; }
 .workspace > .stage + .panel { border-right: none; border-left: 1px solid var(--line); }
 .device-row { display: flex; align-items: center; gap: 12px; flex: 1; min-height: 0; width: 100%; justify-content: center; }
 .screen-box { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 12px; }
+/* Zoomed: scroll instead of clipping; margin:auto keeps the phone centred while it still fits. */
+.screen-box.zoomed { overflow: auto; align-items: flex-start; justify-content: flex-start; }
+.screen-box.zoomed > .phone { margin: auto; }
+.zoom-btn { background: transparent; border: 1px solid var(--line, #2a2f38); color: inherit; border-radius: 4px; padding: 0 6px; font: inherit; line-height: 16px; cursor: pointer; }
+.zoom-btn:hover { background: rgba(255, 255, 255, .08); }
 .side .iconbtn { width: 30px; }
 .side { display: flex; flex-direction: column; gap: 6px; }
 .phone {

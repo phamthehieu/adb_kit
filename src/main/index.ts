@@ -950,6 +950,18 @@ function createWindow(): void {
       backgroundThrottling: false
     }
   })
+  // Ctrl + / Ctrl − / Ctrl 0 used to zoom the whole page (shrinking every panel to a few pixels
+  // with no way to bring it back except Ctrl+0). They now zoom the phone mirror instead, and the
+  // page itself stays at 100%.
+  win.webContents.setVisualZoomLevelLimits(1, 1)
+  win.webContents.on('did-finish-load', () => win?.webContents.setZoomLevel(0)) // undo a stuck page zoom
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return
+    const dir = input.key === '+' || input.key === '=' ? 'in' : input.key === '-' || input.key === '_' ? 'out' : input.key === '0' ? 'reset' : null
+    if (!dir) return
+    e.preventDefault()
+    send('ui:zoom', dir)
+  })
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
   win.on('closed', () => (win = null))
