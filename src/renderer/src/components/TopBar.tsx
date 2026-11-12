@@ -139,6 +139,26 @@ function SettingsButton({ options, onOptions }: { options: MirrorOptions; onOpti
           {sel('bitRate', 'Bitrate', [[2_000_000, '2 Mbps'], [4_000_000, '4 Mbps'], [8_000_000, '8 Mbps'], [16_000_000, '16 Mbps']])}
           {sel('maxFps', 'FPS tối đa', [[30, '30'], [60, '60'], [90, '90'], [120, '120']])}
           <label className="field">
+            Nguồn hình
+            <select
+              className="input"
+              value={options.source ?? 'display'}
+              onChange={(e) => onOptions({ ...options, source: e.target.value as NonNullable<MirrorOptions['source']> })}
+            >
+              <option value="display">Màn hình điện thoại</option>
+              <option value="camera-back">Camera sau (Android 12+, không điều khiển được)</option>
+              <option value="camera-front">Camera trước (Android 12+, không điều khiển được)</option>
+            </select>
+          </label>
+          <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={options.audio === true}
+              onChange={(e) => onOptions({ ...options, audio: e.target.checked })}
+            />
+            Phát âm thanh điện thoại ra PC (Android 11+)
+          </label>
+          <label className="field">
             Codec video
             <select
               className="input"

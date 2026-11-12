@@ -34,6 +34,10 @@ export interface MirrorOptions {
   clipboardSync?: boolean
   /** Video codec. H.265 is smaller at the same quality but untested on every phone's encoder. Default h264. */
   codec?: 'h264' | 'h265'
+  /** Play the phone's sound on the PC (needs Android 11+). Default off. */
+  audio?: boolean
+  /** What to mirror: the screen (default) or a camera (Android 12+; no touch control). */
+  source?: 'display' | 'camera-back' | 'camera-front'
   /** Show touch dots on the phone while mirroring (adb setting, restored on close). Default off. */
   showTouches?: boolean
   /** Put the phone to sleep when the mirror is closed. Default off. */

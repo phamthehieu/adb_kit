@@ -85,6 +85,8 @@ const api = {
     control: (bytes: Uint8Array): void => ipcRenderer.send('mirror:control', bytes),
     onVideo: (cb: (p: VideoPacket) => void) => on('mirror:video', cb),
     onStatus: (cb: (s: MirrorStatus) => void) => on('mirror:status', cb),
+    onAudio: (cb: (pcm: Uint8Array) => void) => on('mirror:audio', cb),
+    onNotice: (cb: (text: string) => void) => on('mirror:notice', cb),
     /** Ctrl + / Ctrl − / Ctrl 0, forwarded by the main process (page zoom is disabled). */
     onZoom: (cb: (dir: 'in' | 'out' | 'reset') => void) => on('ui:zoom', cb)
   },

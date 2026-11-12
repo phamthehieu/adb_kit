@@ -8,6 +8,7 @@ import type { MirrorOptions, VideoPacket } from '../shared/types'
 export const SCRCPY_VERSION = '5.0.1'
 const REMOTE_JAR = '/data/local/tmp/adbkit-scrcpy-server.jar'
 
+const RAW_CODEC_ID = 0x00726177 // "raw"
 const FLAG_SESSION = 1n << 63n
 const FLAG_CONFIG = 1n << 62n
 const FLAG_KEY = 1n << 61n
@@ -77,6 +78,10 @@ export interface ScrcpyEvents {
   closed: [string | null]
   /** Text the phone's clipboard changed to (only when clipboard sync is on). */
   clipboard: [string]
+  /** Raw 48 kHz s16le stereo PCM. */
+  audio: [Uint8Array]
+  /** Something the user should know (e.g. audio not available on this phone). */
+  notice: [string]
 }
 
 /**
@@ -87,6 +92,7 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
   private proc: ChildProcess | null = null
   private video: Socket | null = null
   private control: Socket | null = null
+  private audioSock: Socket | null = null
   private port = 0
   private closed = false
   private serverLog = ''
@@ -134,12 +140,14 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
       throw new Error('cancelled')
     }
 
+    const camera = this.opts.source === 'camera-back' || this.opts.source === 'camera-front'
+    const audio = this.opts.audio === true
     const args = [
       `scid=${scid}`,
       'log_level=info',
       'tunnel_forward=true',
-      'audio=false',
-      'control=true',
+      `audio=${audio}`,
+      `control=${!camera}`,
       `video_codec=${this.opts.codec === 'h265' ? 'h265' : 'h264'}`,
       `max_size=${this.opts.maxSize}`,
       `video_bit_rate=${this.opts.bitRate}`,
@@ -147,6 +155,11 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
       'stay_awake=true',
       `clipboard_autosync=${this.opts.clipboardSync === true}`
     ]
+    // Optional arguments are appended only when switched on, so the default command line stays
+    // identical to the known-good one.
+    if (audio) args.push('audio_codec=raw') // 48 kHz s16le stereo: no audio decoder needed on the PC
+    if (audio && camera) args.push('audio_source=mic') // "output" capture does not apply to a camera
+    if (camera) args.push('video_source=camera', `camera_facing=${this.opts.source === 'camera-front' ? 'front' : 'back'}`)
     // Do NOT add show_touches / power_off_on_close here: on the Samsung S9 (Android 10) they
     // made the H.264 encoder abort (SIGABRT in ACodec::reconfigEncoder4OtherApps) every time.
     this.proc = adbSpawn([
@@ -189,9 +202,18 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
       throw new Error(msg)
     }
 
-    this.control = await openSocket(this.port)
-    this.control.on('error', () => {})
-    void this.readDeviceMessages(new ByteReader(this.control))
+    // Socket order on the server is video, audio, control.
+    let audioReader: ByteReader | null = null
+    if (audio) {
+      this.audioSock = await openSocket(this.port)
+      this.audioSock.on('error', () => {})
+      audioReader = new ByteReader(this.audioSock)
+    }
+    if (!camera) {
+      this.control = await openSocket(this.port)
+      this.control.on('error', () => {})
+      void this.readDeviceMessages(new ByteReader(this.control))
+    }
 
     const nameBuf = await reader.read(64)
     const deviceName = nameBuf.subarray(0, Math.max(0, nameBuf.indexOf(0))).toString('utf8') || s
@@ -201,6 +223,27 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
     dbg('ready ' + deviceName)
     this.emit('ready', deviceName)
     void this.pump(reader)
+    if (audioReader) void this.pumpAudio(audioReader)
+  }
+
+  /** Raw PCM from the phone: header per packet = 8 bytes pts/flags + 4 bytes size. */
+  private async pumpAudio(r: ByteReader): Promise<void> {
+    try {
+      const codec = (await r.read(4)).readUInt32BE(0)
+      if (codec === 0 || codec === 1) {
+        this.emit('notice', 'Điện thoại này không phát được âm thanh về PC (cần Android 11 trở lên).')
+        return
+      }
+      const supported = codec === RAW_CODEC_ID
+      if (!supported) this.emit('notice', 'Định dạng âm thanh của điện thoại chưa được hỗ trợ.')
+      while (!this.closed) {
+        const h = await r.read(12)
+        const data = await r.read(h.readUInt32BE(8))
+        if (supported && !(h.readBigUInt64BE(0) & FLAG_CONFIG)) this.emit('audio', new Uint8Array(data))
+      }
+    } catch {
+      /* socket closed: the video stream decides whether the session is over */
+    }
   }
 
   /** Device → client messages on the control socket: 0 = clipboard, 1 = clipboard ack, 2 = UHID output. */
@@ -274,6 +317,7 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
     this.closed = true
     this.video?.destroy()
     this.control?.destroy()
+    this.audioSock?.destroy()
     this.proc?.kill()
     if (this.port) void adb(['-s', this.serial, 'forward', '--remove', `tcp:${this.port}`])
     this.emit('closed', reason)

@@ -16,6 +16,7 @@ import {
   Volume2
 } from 'lucide-react'
 import type { MirrorOptions, MirrorStatus } from '@shared/types'
+import { AudioPlayer } from '../lib/audio'
 import { H264Player } from '../lib/player'
 import { Action, Key, Msg, displayPower, getClipboard, keycode, scroll, sendKey as rawSendKey, setClipboard, simple, text, touch } from '../lib/control'
 import { autoStore, emitAction, inspectAt, record, useAutoState } from '../lib/automation'
@@ -183,6 +184,9 @@ export function ScreenView(props: Props) {
     playerRef.current = player
     attachRolling(canvas) // replay buffer for quick bug reports
     const offVideo = window.api.mirror.onVideo((p) => player.push(p))
+    const sound = options.audio === true ? new AudioPlayer() : null
+    const offAudio = window.api.mirror.onAudio((pcm) => sound?.push(pcm))
+    const offNotice = window.api.mirror.onNotice((text) => onStatus({ text, error: true }))
     let alive = true
     let stillTimer = 0
     const offStatus = window.api.mirror.onStatus((s) => {
@@ -212,13 +216,16 @@ export function ScreenView(props: Props) {
       clearTimeout(stillTimer)
       clearInterval(t)
       offVideo()
+      offAudio()
+      offNotice()
+      sound?.dispose()
       offStatus()
       detachRolling()
       player.dispose()
       playerRef.current = null
       void window.api.mirror.stop() // scrcpy-server turns the display back on when it exits
     }
-  }, [serial, options.maxSize, options.bitRate, options.maxFps, options.clipboardSync, options.codec, options.showTouches, options.powerOffOnClose, restartKey, reapplyScreenOff])
+  }, [serial, options.maxSize, options.bitRate, options.maxFps, options.clipboardSync, options.codec, options.audio, options.source, options.showTouches, options.powerOffOnClose, restartKey, reapplyScreenOff])
 
   // Toggling the setting while mirroring.
   useEffect(() => {

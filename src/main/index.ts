@@ -160,8 +160,18 @@ async function startMirror(serial: string, opts: MirrorOptions): Promise<void> {
   session.on('ready', (name) => {
     if (mirror === session) setStatus({ state: 'running', serial, deviceName: name })
   })
+  session.on('audio', (pcm) => {
+    if (mirror === session) send('mirror:audio', pcm)
+  })
+  session.on('notice', (text) => {
+    if (mirror === session) send('mirror:notice', text)
+  })
   session.on('clipboard', async (text) => {
-    if (mirror === session && text && (await clipboard.readText()) !== text) await clipboard.writeText(text)
+    try {
+      if (mirror === session && text && (await clipboard.readText()) !== text) await clipboard.writeText(text)
+    } catch {
+      /* the PC clipboard can be locked by another app for a moment; just skip this copy */
+    }
   })
   session.on('closed', (reason) => {
     if (mirror !== session) return
