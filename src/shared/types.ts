@@ -32,6 +32,8 @@ export interface MirrorOptions {
   maxFps: number
   /** Phone → PC clipboard sync (scrcpy clipboard_autosync). Default off. */
   clipboardSync?: boolean
+  /** Video codec. H.265 is smaller at the same quality but untested on every phone's encoder. Default h264. */
+  codec?: 'h264' | 'h265'
   /** Show touch dots on the phone while mirroring (adb setting, restored on close). Default off. */
   showTouches?: boolean
   /** Put the phone to sleep when the mirror is closed. Default off. */

@@ -15,8 +15,11 @@ function codecFromConfig(config: Uint8Array): string {
   return 'avc1.42e01f' // baseline 3.1 fallback
 }
 
+/** HEVC: Main profile, level 5.1 — the decoder only needs a plausible profile for Annex-B input. */
+const HEVC_CODEC = 'hev1.1.6.L153.B0'
+
 /**
- * Decodes the scrcpy H.264 stream with WebCodecs (hardware accelerated) and paints
+ * Decodes the scrcpy H.264 (or opt-in H.265) stream with WebCodecs (hardware accelerated) and paints
  * every decoded frame onto a canvas immediately, for minimal latency.
  */
 export class H264Player {
@@ -35,7 +38,10 @@ export class H264Player {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly onSize: (w: number, h: number) => void,
-    private readonly onFirstFrame: () => void
+    private readonly onFirstFrame: () => void,
+    private readonly codecKind: 'h264' | 'h265' = 'h264',
+    /** Called when this PC cannot decode the chosen codec. */
+    private readonly onUnsupported: () => void = () => {}
   ) {
     this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true })!
     this.fpsTimer = window.setInterval(() => {
@@ -54,7 +60,7 @@ export class H264Player {
     if (p.kind === 'config') {
       this.config = p.data
       this.pendingConfig = true
-      this.configure(codecFromConfig(p.data))
+      this.configure(this.codecString(p.data))
       return
     }
     if (!this.decoder || this.decoder.state !== 'configured') {
@@ -104,6 +110,10 @@ export class H264Player {
     window.api.mirror.control(simple(Msg.ResetVideo))
   }
 
+  private codecString(config: Uint8Array): string {
+    return this.codecKind === 'h265' ? HEVC_CODEC : codecFromConfig(config)
+  }
+
   private configure(codec: string): void {
     this.decoder?.close()
     let first = true
@@ -128,13 +138,20 @@ export class H264Player {
         console.warn('decoder error', e)
         this.waitingKey = true
         this.pendingConfig = true
-        if (this.config) queueMicrotask(() => this.configure(codecFromConfig(this.config!)))
+        if (this.config) queueMicrotask(() => this.configure(this.codecString(this.config!)))
         // Ask the server for a fresh key frame instead of waiting for the next periodic one.
         this.requestKeyFrame()
       }
     })
     // No `description` => bitstream is Annex-B, which is what scrcpy sends.
-    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: 'no-preference' })
+    const cfg = { codec, optimizeForLatency: true, hardwareAcceleration: 'no-preference' } as VideoDecoderConfig
+    if (this.codecKind === 'h265') (cfg as unknown as { hevc: { format: string } }).hevc = { format: 'annexb' }
+    if (this.codecKind === 'h265') {
+      void VideoDecoder.isConfigSupported(cfg).then((r) => {
+        if (!r.supported) this.onUnsupported()
+      })
+    }
+    decoder.configure(cfg)
     this.decoder = decoder
     this.waitingKey = true
   }

@@ -146,6 +146,22 @@ export function ScreenView(props: Props) {
     }, delay)
   }, [])
 
+  // The stream dies whenever the phone re-enumerates on USB (e.g. switching USB tethering on or
+  // off). Reconnect on our own with a growing delay instead of leaving a frozen last frame.
+  const retries = useRef(0)
+  useEffect(() => {
+    if (mirror.state === 'running') {
+      retries.current = 0
+      return
+    }
+    if (mirror.state !== 'error' || retries.current >= 8) return
+    const t = window.setTimeout(() => {
+      retries.current++
+      setRestartKey((k) => k + 1)
+    }, Math.min(10_000, 1500 * 2 ** retries.current))
+    return () => window.clearTimeout(t)
+  }, [mirror])
+
   // Start mirroring whenever the device or the stream options change.
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -156,7 +172,13 @@ export function ScreenView(props: Props) {
         setDims({ w, h })
         reapplyScreenOff() // a new session (rotation, encoder reset) may have lit the panel
       },
-      () => setHasFrame(true)
+      () => setHasFrame(true),
+      options.codec === 'h265' ? 'h265' : 'h264',
+      () =>
+        onStatus({
+          text: 'Máy tính này không giải mã được H.265. Hãy chọn lại H.264 trong cài đặt mirror.',
+          error: true
+        })
     )
     playerRef.current = player
     attachRolling(canvas) // replay buffer for quick bug reports
@@ -196,7 +218,7 @@ export function ScreenView(props: Props) {
       playerRef.current = null
       void window.api.mirror.stop() // scrcpy-server turns the display back on when it exits
     }
-  }, [serial, options.maxSize, options.bitRate, options.maxFps, options.clipboardSync, options.showTouches, options.powerOffOnClose, restartKey, reapplyScreenOff])
+  }, [serial, options.maxSize, options.bitRate, options.maxFps, options.clipboardSync, options.codec, options.showTouches, options.powerOffOnClose, restartKey, reapplyScreenOff])
 
   // Toggling the setting while mirroring.
   useEffect(() => {
@@ -573,11 +595,12 @@ export function ScreenView(props: Props) {
                 </button>
               </div>
             )}
-            {!hasFrame && (
+            {(!hasFrame || mirror.state === 'error') && (
               <div className="overlay">
                 {mirror.state === 'error' ? (
                   <>
                     <b>Mirror đã dừng</b>
+                    <span>{retries.current < 8 ? 'Đang tự kết nối lại… (điện thoại có thể vừa đổi chế độ USB)' : 'Đã thử lại nhiều lần mà chưa được.'}</span>
                     <pre>{mirror.message}</pre>
                     <button className="iconbtn" onClick={() => setRestartKey((k) => k + 1)}>
                       <RefreshCw size={13} /> Thử lại

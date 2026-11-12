@@ -140,7 +140,7 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
       'tunnel_forward=true',
       'audio=false',
       'control=true',
-      'video_codec=h264',
+      `video_codec=${this.opts.codec === 'h265' ? 'h265' : 'h264'}`,
       `max_size=${this.opts.maxSize}`,
       `video_bit_rate=${this.opts.bitRate}`,
       `max_fps=${this.opts.maxFps}`,

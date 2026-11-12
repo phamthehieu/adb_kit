@@ -138,6 +138,17 @@ function SettingsButton({ options, onOptions }: { options: MirrorOptions; onOpti
           {sel('maxSize', 'Độ phân giải tối đa (cạnh dài)', [[720, '720p'], [1024, '1024'], [1280, '1280'], [1600, '1600'], [1920, '1920'], [0, 'Gốc']])}
           {sel('bitRate', 'Bitrate', [[2_000_000, '2 Mbps'], [4_000_000, '4 Mbps'], [8_000_000, '8 Mbps'], [16_000_000, '16 Mbps']])}
           {sel('maxFps', 'FPS tối đa', [[30, '30'], [60, '60'], [90, '90'], [120, '120']])}
+          <label className="field">
+            Codec video
+            <select
+              className="input"
+              value={options.codec === 'h265' ? 'h265' : 'h264'}
+              onChange={(e) => onOptions({ ...options, codec: e.target.value as 'h264' | 'h265' })}
+            >
+              <option value="h264">H.264 (mặc định, ổn định)</option>
+              <option value="h265">H.265 (thử nghiệm, nhẹ hơn)</option>
+            </select>
+          </label>
           <label className="field" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <input
               type="checkbox"
