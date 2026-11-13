@@ -17,6 +17,23 @@ npm run dist       # đóng gói installer Windows (electron-builder)
 - Nếu tiến trình cha có đặt `ELECTRON_RUN_AS_NODE=1` (một số extension của VS Code làm vậy) thì phải bỏ biến này đi, nếu không Electron sẽ chạy như Node thuần.
 - Muốn xem log debug của luồng mirror: đặt `ADBKIT_DEBUG=1`.
 
+## Build cho macOS
+
+File `.dmg` chỉ build được **trên máy Mac** (hoặc runner `macos-latest` của GitHub Actions, xem `.github/workflows/release.yml`: đẩy tag `v*` là tự build Windows + Mac + Linux).
+
+```bash
+# trên Mac, cần Node 22+
+git clone https://github.com/phamthehieu/adb_kit.git && cd adb_kit
+npm ci
+npm run dist:mac          # ra dist/ADB Kit-<version>-arm64.dmg và -x64.dmg (+ .zip)
+```
+
+- `arm64` cho Mac chip Apple (M1 trở lên), `x64` cho Mac Intel.
+- Bản build **chưa ký số / chưa notarize** nên macOS sẽ chặn lần đầu: chuột phải vào app › **Open**, hoặc chạy `xattr -cr "/Applications/ADB Kit.app"` rồi mở lại.
+- Mac không cần driver USB. Nếu máy chưa có `adb`, app có nút "Tải adb từ Google" (bản darwin). Cũng có thể `brew install android-platform-tools`.
+- Chạy dòng lệnh (CI) trên Mac: `"/Applications/ADB Kit.app/Contents/MacOS/ADB Kit" --run "/đường/dẫn/bo-test.json"`.
+- Chưa được thử trên Mac thật: phím tắt dùng Cmd (Cmd+C/V/A/Z trên mirror) có thể bị menu mặc định của Electron chặn.
+
 ## Chức năng
 
 - **Thiết bị:** tab cho từng máy (USB / Wi-Fi), kết nối và pair qua Wi-Fi (nút `+`), nút "Switch to Wi-Fi" (`adb tcpip 5555`).
