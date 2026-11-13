@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, BellRing, Bot, Bug, Eye, Gauge, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
+import { AppWindow, BellRing, Bot, Bug, Eye, FlaskConical, Gauge, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
 import { ScreenView } from './components/ScreenView'
@@ -11,6 +11,7 @@ import { NetworkPanel } from './components/NetworkPanel'
 import { FigmaPanel } from './components/FigmaPanel'
 import { MiniAppPanel } from './components/MiniAppPanel'
 import { BugDialog, type BugPreset } from './components/BugDialog'
+import { ApiLabModal } from './components/ApiLabModal'
 import { autoStore, recentTrail } from './lib/automation'
 import { grabRolling } from './lib/rollingVideo'
 import { describeStep } from '@shared/automation'
@@ -167,6 +168,7 @@ export function App() {
 
   const [bugOpen, setBugOpen] = useState(false)
   const [bugPreset, setBugPreset] = useState<BugPreset | undefined>()
+  const [apiLabOpen, setApiLabOpen] = useState(false)
 
   // Background crash / ANR watch for the phone on screen: freeze the evidence the moment it
   // happens (the app restarts and the screen changes fast), then offer a prefilled bug report.
@@ -348,6 +350,13 @@ export function App() {
           <span className="tg-cap">Kiểm thử</span>
           {tool('auto', <Bot size={14} />, 'Tự động test')}
           {tool('req', <FileText size={14} />, 'Tài liệu YC')}
+          <button
+            className={`iconbtn ${apiLabOpen ? 'on' : ''}`}
+            onClick={() => setApiLabOpen(true)}
+            title="Kiểm thử API độc lập & theo FE (Soạn request, lấy Token từ Server hoặc từ máy, nạp Swagger / Postman / Tài liệu SRS, chạy bộ test tự động)"
+          >
+            <FlaskConical size={14} /> <span className="tl">Thử API</span>
+          </button>
           {tool('stress', <Hammer size={14} />, 'Độ bền')}
           {tool('perf', <Gauge size={14} />, 'Hiệu năng')}
           {tool('push', <BellRing size={14} />, 'Thông báo')}
@@ -412,6 +421,13 @@ export function App() {
                 }}
               >
                 <HelpCircle size={14} /> Xem hướng dẫn kết nối chi tiết
+              </button>
+              <button
+                className="iconbtn"
+                onClick={() => setApiLabOpen(true)}
+                title="Mở API Studio để kiểm thử API độc lập (từ Tài liệu SRS, Swagger, Postman) ngay cả khi chưa cắm điện thoại"
+              >
+                <FlaskConical size={14} /> Mở Thử API độc lập (Không cần điện thoại)
               </button>
             </div>
           </div>
@@ -500,6 +516,13 @@ export function App() {
           steps={tour}
           onPanel={(p) => go(p === 'none' ? 'none' : (p as Panel))}
           onClose={() => setTour(null)}
+        />
+      )}
+
+      {apiLabOpen && (
+        <ApiLabModal
+          calls={[]}
+          onClose={() => setApiLabOpen(false)}
         />
       )}
 

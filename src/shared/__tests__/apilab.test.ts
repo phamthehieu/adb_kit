@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyLiveAuth,
+  autoFindTokenInResponse,
   evalProbe,
   exportPostmanCollection,
+  flattenJsonLeaves,
   fromCurl,
+  importOpenApiSpec,
   importPostmanCollection,
   probesForRequest,
   requestFromCall,
+  requestFromDocApi,
   resolveEnvVars,
   toCurl
 } from '../apilab'
@@ -221,5 +225,87 @@ describe('apilab', () => {
     expect(checkJsonExpr(body, 'data.status != LOCKED')).toBeNull()
     expect(checkJsonExpr(body, 'code=99')).toContain('JSON "code" = "00"')
     expect(checkJsonExpr(body, 'data.items.length > 5')).toContain('JSON "data.items.length" = 2')
+  })
+
+  it('builds a standalone request directly from BA SRS ReqApi when FE is down', () => {
+    const apiSpec: ReqApi = {
+      id: 'api-doc-1',
+      name: 'API Tạo đơn hàng',
+      method: 'POST',
+      url: '/api/v1/orders',
+      purpose: 'Tạo đơn mới',
+      inputs: [
+        { name: 'customerPhone', type: 'String', required: true, desc: 'Số điện thoại KH' },
+        { name: 'totalAmount', type: 'Number', required: true, desc: 'Tổng tiền' },
+        { name: 'isExpress', type: 'Boolean', required: false, desc: 'Giao nhanh' }
+      ],
+      outputs: [],
+      outputText: '',
+      steps: [],
+      codes: []
+    }
+    const built = requestFromDocApi(apiSpec, 'https://uat.example.com')
+    expect(built.method).toBe('POST')
+    expect(built.url).toBe('https://uat.example.com/api/v1/orders')
+    expect(built.headers.find((h) => h.name === 'Authorization')?.value).toBe('Bearer {{token}}')
+    expect(JSON.parse(built.body)).toEqual({
+      customerPhone: '0987654321',
+      totalAmount: 100000,
+      isExpress: true
+    })
+  })
+
+  it('imports OpenAPI 3.0 / Swagger specs and extracts sample bodies + baseUrl', () => {
+    const openapiJson = JSON.stringify({
+      openapi: '3.0.1',
+      info: { title: 'Order Service API' },
+      servers: [{ url: 'https://uat-api.domain.vn' }],
+      paths: {
+        '/v1/orders': {
+          post: {
+            tags: ['Orders'],
+            summary: 'Create order',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      sku: { type: 'string', example: 'SKU-01' },
+                      qty: { type: 'integer', default: 2 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+    const parsed = importOpenApiSpec(openapiJson, 'com.test')
+    expect(parsed.name).toBe('Order Service API')
+    expect(parsed.vars.baseUrl).toBe('https://uat-api.domain.vn')
+    expect(parsed.items).toHaveLength(1)
+    expect(parsed.items[0].name).toBe('Orders / Create order')
+    expect(parsed.items[0].req.method).toBe('POST')
+    expect(parsed.items[0].req.url).toBe('{{baseUrl}}/v1/orders')
+    expect(JSON.parse(parsed.items[0].req.body)).toEqual({ sku: 'SKU-01', qty: 2 })
+  })
+
+  it('automatically finds auth tokens and flattens response leaves for chaining APIs', () => {
+    const loginRes = JSON.stringify({
+      code: '00',
+      data: {
+        accessToken: 'Bearer eyJhbGciOiJIUzI1NiJ9.direct_server_token',
+        userId: 8899
+      }
+    })
+    const found = autoFindTokenInResponse(loginRes)
+    expect(found).toEqual({
+      path: 'data.accessToken',
+      token: 'eyJhbGciOiJIUzI1NiJ9.direct_server_token'
+    })
+    const leaves = flattenJsonLeaves(loginRes)
+    expect(leaves.map((l) => l.path)).toEqual(['code', 'data.accessToken', 'data.userId'])
   })
 })

@@ -1,11 +1,12 @@
 /**
- * Active API testing ("Bắn thử API"): build or import an HTTP request from a captured device call
- * or a cURL command, sync live auth tokens from the phone, generate negative/boundary test probes
- * (from the JSON payload and/or a BA requirement document), and evaluate server answers.
+ * Active API testing ("Bắn thử API"): build or import an HTTP request from a captured device call,
+ * a BA requirement document (SRS), a Swagger/OpenAPI spec, Postman collection, or cURL; obtain auth
+ * tokens either from the live phone (FE) or directly from a Backend Login API; generate negative/boundary
+ * test probes and evaluate server answers.
  */
 import type { NetCall } from './automation'
 import { isFieldName, pathOf, type FieldMap } from './reqapi'
-import { fold, type ReqApi } from './reqdoc'
+import { fold, type ReqApi, type ReqParam } from './reqdoc'
 
 /* ------------------------------------------------------------------ model */
 
@@ -95,6 +96,84 @@ export function requestFromCall(c: NetCall): ApiRequest {
     headers,
     body
   }
+}
+
+/** Guess a realistic sample value for a documented API parameter when FE hasn't called the API yet. */
+function sampleValueForParam(key: string, p: ReqParam): unknown {
+  const t = fold(p.type ?? '')
+  const k = fold(`${key} ${p.name} ${p.desc ?? ''}`)
+  if (/array|list|mang/.test(t) || /\[\]$/.test(p.name.trim())) return []
+  if (/object|json|map/.test(t)) return {}
+  if (/bool/.test(t)) return true
+  if (/number|int|long|double|float|decimal|\bso\b/.test(t)) {
+    if (/page|trang/.test(k)) return 1
+    if (/size|limit|ipp|perpage/.test(k)) return 20
+    if (/amount|price|tien|gia|total/.test(k)) return 100000
+    return 1
+  }
+  if (/phone|mobile|msisdn|sdt|so dien thoai/.test(k)) return '0987654321'
+  if (/email|mail/.test(k)) return 'tester@example.com'
+  if (/date|ngay|time|from|to/.test(k)) return '2026-01-15'
+  if (/id$|code$|ma /.test(k)) return '1'
+  return 'test_value'
+}
+
+/**
+ * Build a ready-to-send ApiRequest directly from a BA Requirement API spec (`ReqApi`),
+ * allowing testers to test the API independently even when the mobile FE is down or unbuilt.
+ */
+export function requestFromDocApi(api: ReqApi, baseUrl = '{{baseUrl}}', fieldMap: FieldMap = {}): ApiRequest {
+  const method = (api.method || (api.inputs.length ? 'POST' : 'GET')).toUpperCase()
+  const rawPath = (api.url || `/api/${fold(api.name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`).trim()
+  const cleanBase = (baseUrl || '{{baseUrl}}').replace(/\/+$/, '')
+  let url = /^https?:\/\//i.test(rawPath) || rawPath.startsWith('{{')
+    ? rawPath
+    : `${cleanBase}${rawPath.startsWith('/') ? '' : '/'}${rawPath}`
+
+  const headers: ApiHeader[] = [
+    { name: 'Accept', value: 'application/json', enabled: true },
+    { name: 'Authorization', value: 'Bearer {{token}}', enabled: true }
+  ]
+
+  const bodyObj: Record<string, unknown> = {}
+  const queryParams = new URLSearchParams()
+
+  for (let idx = 0; idx < api.inputs.length; idx++) {
+    const p = api.inputs[idx]
+    const mapped = fieldMap[`in:${p.name}`]
+    const rawKey = mapped || (isFieldName(p.name) ? p.name.trim() : `param_${idx + 1}`)
+    const cleanKey = rawKey.replace(/\[\]/g, '')
+    if (!cleanKey || /^(authorization|token|bearer|access_token)$/i.test(cleanKey)) continue
+    const val = sampleValueForParam(cleanKey, p)
+
+    if (/^(GET|HEAD|DELETE)$/i.test(method)) {
+      if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+        queryParams.set(cleanKey, String(val))
+      }
+    } else {
+      const parts = cleanKey.split('.')
+      let cur: Record<string, unknown> = bodyObj
+      for (let i = 0; i < parts.length - 1; i++) {
+        const seg = parts[i]
+        if (!cur[seg] || typeof cur[seg] !== 'object' || Array.isArray(cur[seg])) {
+          cur[seg] = {}
+        }
+        cur = cur[seg] as Record<string, unknown>
+      }
+      cur[parts[parts.length - 1]] = val
+    }
+  }
+
+  let body = ''
+  if (/^(GET|HEAD|DELETE)$/i.test(method)) {
+    const qs = queryParams.toString()
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs
+  } else {
+    headers.unshift({ name: 'Content-Type', value: 'application/json', enabled: true })
+    body = JSON.stringify(Object.keys(bodyObj).length ? bodyObj : { sample: 'value' }, null, 2)
+  }
+
+  return { method, url, headers, body }
 }
 
 /** Pull the freshest auth headers (Authorization, Cookie, token…) from recent device calls. */
@@ -667,15 +746,20 @@ function extractPostmanUrl(u: string | PostmanUrl | undefined): string {
   return host ? `${proto}${host}${path ? `/${path.replace(/^\//, '')}` : ''}` : ''
 }
 
-/** Import requests and collection variables from a Postman Collection v2.0 / v2.1 JSON string. */
+/** Import requests and variables from either a Postman Collection v2.x OR a Swagger 2.0 / OpenAPI 3.x JSON string. */
 export function importPostmanCollection(jsonText: string, pkg?: string): { name: string; items: SavedApiItem[]; vars: Record<string, string> } {
-  const root = JSON.parse(jsonText) as {
+  const raw = JSON.parse(jsonText) as Record<string, unknown>
+  if (raw && (typeof raw.openapi === 'string' || typeof raw.swagger === 'string') && raw.paths && typeof raw.paths === 'object') {
+    return importOpenApiSpec(jsonText, pkg)
+  }
+
+  const root = raw as {
     info?: { name?: string }
     item?: PostmanItem[]
     variable?: { key?: string; value?: string; disabled?: boolean }[]
   }
   if (!root || !Array.isArray(root.item)) {
-    throw new Error('File không đúng định dạng Postman Collection v2.x')
+    throw new Error('File không đúng định dạng Postman Collection v2.x hoặc Swagger / OpenAPI JSON')
   }
 
   const vars: Record<string, string> = {}
@@ -762,4 +846,205 @@ export function exportPostmanCollection(name: string, items: SavedApiItem[], var
   }
   return JSON.stringify(col, null, 2)
 }
+
+/* ------------------------------------------- OpenAPI / Swagger 2.0 & 3.x import */
+
+interface OpenApiSchema {
+  $ref?: string
+  type?: string
+  properties?: Record<string, OpenApiSchema>
+  items?: OpenApiSchema
+  example?: unknown
+  default?: unknown
+  enum?: unknown[]
+}
+
+function resolveSchemaRef(root: Record<string, unknown>, ref: string): OpenApiSchema | null {
+  if (!ref.startsWith('#/')) return null
+  const parts = ref.slice(2).split('/')
+  let cur: unknown = root
+  for (const p of parts) {
+    if (!cur || typeof cur !== 'object') return null
+    cur = (cur as Record<string, unknown>)[p]
+  }
+  return cur && typeof cur === 'object' ? (cur as OpenApiSchema) : null
+}
+
+function sampleFromSchema(root: Record<string, unknown>, schema: OpenApiSchema | undefined, depth = 0): unknown {
+  if (!schema || depth > 4) return 'string'
+  if (schema.$ref) {
+    const target = resolveSchemaRef(root, schema.$ref)
+    return target ? sampleFromSchema(root, target, depth + 1) : {}
+  }
+  if (schema.example !== undefined) return schema.example
+  if (schema.default !== undefined) return schema.default
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0]
+  if (schema.type === 'object' || schema.properties) {
+    const obj: Record<string, unknown> = {}
+    for (const [k, prop] of Object.entries(schema.properties ?? {})) {
+      obj[k] = sampleFromSchema(root, prop, depth + 1)
+    }
+    return obj
+  }
+  if (schema.type === 'array') {
+    return [sampleFromSchema(root, schema.items, depth + 1)]
+  }
+  if (schema.type === 'integer' || schema.type === 'number') return 1
+  if (schema.type === 'boolean') return true
+  return 'string'
+}
+
+/** Import endpoints and sample payloads from a Swagger 2.0 or OpenAPI 3.x JSON specification. */
+export function importOpenApiSpec(jsonText: string, pkg?: string): { name: string; items: SavedApiItem[]; vars: Record<string, string> } {
+  const root = JSON.parse(jsonText) as Record<string, unknown>
+  const info = (root.info ?? {}) as { title?: string }
+  const paths = (root.paths ?? {}) as Record<string, Record<string, unknown>>
+  if (!paths || typeof paths !== 'object') {
+    throw new Error('Không tìm thấy danh sách paths trong file Swagger / OpenAPI')
+  }
+
+  const vars: Record<string, string> = {}
+  const servers = root.servers as { url?: string }[] | undefined
+  if (Array.isArray(servers) && servers[0]?.url) {
+    vars.baseUrl = servers[0].url.replace(/\/+$/, '')
+  } else if (typeof root.host === 'string') {
+    const scheme = Array.isArray(root.schemes) && typeof root.schemes[0] === 'string' ? root.schemes[0] : 'https'
+    const bp = typeof root.basePath === 'string' ? root.basePath.replace(/\/+$/, '') : ''
+    vars.baseUrl = `${scheme}://${root.host}${bp}`
+  }
+
+  const items: SavedApiItem[] = []
+  let seq = 0
+  const httpMethods = ['get', 'post', 'put', 'patch', 'delete']
+
+  for (const [p, ops] of Object.entries(paths)) {
+    if (!ops || typeof ops !== 'object') continue
+    for (const m of httpMethods) {
+      const op = ops[m] as {
+        summary?: string
+        operationId?: string
+        tags?: string[]
+        parameters?: { name?: string; in?: string; required?: boolean; schema?: OpenApiSchema; type?: string }[]
+        requestBody?: { content?: Record<string, { schema?: OpenApiSchema; example?: unknown }> }
+      } | undefined
+      if (!op || typeof op !== 'object') continue
+
+      const method = m.toUpperCase()
+      const tag = Array.isArray(op.tags) && op.tags[0] ? `${op.tags[0]} / ` : ''
+      const label = `${tag}${op.summary || op.operationId || `${method} ${p}`}`
+
+      const query = new URLSearchParams()
+      let bodySchema: OpenApiSchema | undefined
+      let bodyExample: unknown
+
+      for (const param of op.parameters ?? []) {
+        if (param.in === 'query' && param.name) {
+          query.set(param.name, param.type === 'integer' || param.type === 'number' ? '1' : 'test')
+        } else if (param.in === 'body' && param.schema) {
+          bodySchema = param.schema
+        }
+      }
+
+      if (op.requestBody?.content) {
+        const jsonMedia = op.requestBody.content['application/json'] ?? Object.values(op.requestBody.content)[0]
+        if (jsonMedia) {
+          bodySchema = jsonMedia.schema
+          bodyExample = jsonMedia.example
+        }
+      }
+
+      const qs = query.toString()
+      const url = `{{baseUrl}}${p.startsWith('/') ? '' : '/'}${p}${qs ? `?${qs}` : ''}`
+      const headers: ApiHeader[] = [
+        { name: 'Accept', value: 'application/json', enabled: true },
+        { name: 'Authorization', value: 'Bearer {{token}}', enabled: true }
+      ]
+
+      let body = ''
+      if (!/^(GET|HEAD)$/i.test(method) && (bodyExample !== undefined || bodySchema)) {
+        headers.unshift({ name: 'Content-Type', value: 'application/json', enabled: true })
+        const sample = bodyExample !== undefined ? bodyExample : sampleFromSchema(root, bodySchema)
+        body = typeof sample === 'string' ? sample : JSON.stringify(sample, null, 2)
+      }
+
+      items.push({
+        id: `oas-${Date.now()}-${++seq}`,
+        name: label,
+        pkg,
+        req: { method, url, headers, body },
+        updatedAt: Date.now()
+      })
+    }
+  }
+
+  return { name: info.title || 'Swagger / OpenAPI', items, vars }
+}
+
+/* ------------------------------------------- Direct Auth / Token & Variable Extraction */
+
+/** Read a dotted path (e.g. "data.accessToken" or "result.user.id") from a JSON response string. */
+export function extractJsonByPath(body: string, dotPath: string): string | null {
+  const json = parseJsonBody(body)
+  if (!json || !dotPath.trim()) return null
+  const val = getAtPath(json, dotPath.trim())
+  if (val === undefined || val === null) return null
+  return typeof val === 'object' ? JSON.stringify(val) : String(val)
+}
+
+/**
+ * Automatically locate a JWT / access token inside a Login API JSON response body
+ * (looks for access_token, accessToken, token, jwt, id_token at top-level or inside data/result).
+ */
+export function autoFindTokenInResponse(body: string, customPath?: string): { path: string; token: string } | null {
+  if (customPath?.trim()) {
+    const v = extractJsonByPath(body, customPath.trim())
+    if (v) return { path: customPath.trim(), token: v.replace(/^bearer\s+/i, '').trim() }
+  }
+  const json = parseJsonBody(body)
+  if (!json) return null
+
+  const candidates = [
+    'access_token',
+    'accessToken',
+    'token',
+    'jwt',
+    'id_token',
+    'idToken',
+    'data.access_token',
+    'data.accessToken',
+    'data.token',
+    'data.jwt',
+    'result.access_token',
+    'result.accessToken',
+    'result.token',
+    'payload.token',
+    'response.token'
+  ]
+  for (const p of candidates) {
+    const v = getAtPath(json, p)
+    if (typeof v === 'string' && v.trim().length >= 8) {
+      return { path: p, token: v.replace(/^bearer\s+/i, '').trim() }
+    }
+  }
+  return null
+}
+
+/** Flatten scalar fields of a JSON response so the tester can click any field to save into {{var}}. */
+export function flattenJsonLeaves(body: string, maxItems = 24): { path: string; shortKey: string; value: string }[] {
+  const json = parseJsonBody(body)
+  if (!json) return []
+  const paths = jsonPaths(json)
+  const out: { path: string; shortKey: string; value: string }[] = []
+  for (const p of paths) {
+    if (out.length >= maxItems) break
+    const v = getAtPath(json, p)
+    if (v === null || v === undefined || typeof v === 'object') continue
+    const str = String(v)
+    if (!str.trim()) continue
+    const shortKey = p.split('.').pop() || p
+    out.push({ path: p, shortKey, value: str })
+  }
+  return out
+}
+
 

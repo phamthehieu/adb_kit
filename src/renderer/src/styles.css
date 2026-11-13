@@ -1762,11 +1762,11 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .cutout-waterfall { top: 6px; bottom: 6px; width: 14px; background: linear-gradient(to right, rgba(0,0,0,0.6), transparent); left: 6px; }
 
 /* ---------- Active API Tester (ApiLabModal) ---------- */
-.apilab-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
-.apilab-modal { width: min(1220px, 95vw); height: min(820px, 90vh); background: var(--bg-1); border: 1px solid var(--line-2); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65); }
-.apilab-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
-.apilab-ico { color: var(--accent); }
-.apilab-tabs { display: flex; gap: 4px; margin-left: 12px; background: var(--bg-1); padding: 3px; border-radius: 8px; border: 1px solid var(--line); }
+.apilab-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(3px); }
+.apilab-modal { width: min(1360px, 96vw); height: min(860px, 92vh); background: var(--bg-1); border: 1px solid var(--line-2); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65); }
+.apilab-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-2); flex-wrap: wrap; }
+.apilab-ico { color: var(--accent); flex: none; }
+.apilab-tabs { display: flex; gap: 4px; margin-left: 8px; background: var(--bg-1); padding: 3px; border-radius: 8px; border: 1px solid var(--line); }
 .apilab-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); cursor: pointer; font-size: 12.5px; font-weight: 500; }
 .apilab-tab:hover { color: var(--fg); background: var(--bg-3); }
 .apilab-tab.on { color: var(--fg); background: var(--accent-dim); border: 1px solid #2f6b4b; }
@@ -1776,7 +1776,29 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .apilab-urlbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-1); flex-wrap: wrap; }
 .apilab-method { width: 104px; height: 34px; font-weight: 600; font-family: var(--mono); font-size: 13px; }
 .apilab-url { flex: 1 1 320px; min-width: 280px; height: 34px; font-size: 13.5px; padding: 0 12px; }
+.apilab-authbox { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; background: #101720; border-bottom: 1px solid var(--line-2); }
+.apilab-authbox-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
 .apilab-notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 14px; background: var(--accent-dim); border-bottom: 1px solid #2f6b4b; color: var(--fg); font-size: 12.5px; }
+.apilab-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.apilab-sidebar { width: 300px; flex: 0 0 300px; border-right: 1px solid var(--line); background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
+.apilab-side-tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--bg-2); padding: 4px 6px; gap: 3px; }
+.apilab-side-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 6px; padding: 5px 6px; background: transparent; color: var(--fg-mute); font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.apilab-side-tab:hover { color: var(--fg); background: var(--bg-3); }
+.apilab-side-tab.on { color: var(--accent); background: var(--accent-dim); }
+.apilab-side-tools { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.apilab-side-actions { display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; background: var(--bg-2); }
+.apilab-side-list { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+.apilab-side-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid #161b22; cursor: pointer; transition: background-color 0.12s; }
+.apilab-side-item:hover { background: var(--bg-2); }
+.apilab-side-item.sel { background: var(--accent-dim); box-shadow: inset 3px 0 0 var(--accent); }
+.apilab-side-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.apilab-side-name { font-size: 12.5px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apilab-side-sub { font-size: 11px; color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apilab-mbadge { flex: none; font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px; min-width: 44px; text-align: center; text-transform: uppercase; background: var(--bg-3); color: var(--fg-dim); }
+.apilab-mbadge.m-get { background: rgba(90, 169, 255, 0.16); color: #6cb4ff; }
+.apilab-mbadge.m-post { background: rgba(61, 220, 132, 0.16); color: #4be08e; }
+.apilab-mbadge.m-put, .apilab-mbadge.m-patch { background: rgba(245, 195, 92, 0.16); color: #f5c35c; }
+.apilab-mbadge.m-delete { background: rgba(255, 123, 123, 0.16); color: #ff7b7b; }
 .apilab-split { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
 .apilab-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); overflow: hidden; }
 .apilab-pane:last-child { border-right: 0; }
