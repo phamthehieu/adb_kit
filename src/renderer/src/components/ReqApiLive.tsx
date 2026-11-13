@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, CircleDot, FlaskConical, Link2, Loader2, Play, Square, X } from 'lucide-react'
+import { AlertTriangle, Check, CircleDot, FlaskConical, Link2, Loader2, Play, Send, Sparkles, Square, X } from 'lucide-react'
 import type { NetCall } from '@shared/automation'
 import type { ReqApi, ReqDoc } from '@shared/reqdoc'
 import { conformIssues, conformance, endpointsOf, parseBody, scenariosOf, suggestPath, type ConformReport, type FieldMap, type ParamCheck, type Scenario } from '@shared/reqapi'
+import { ApiLabModal } from './ApiLabModal'
 
 /* ------------------------------------------------------------ capture */
 
@@ -176,6 +177,7 @@ function ParamRows({ title, rows, keys, onMap, manual }: { title: string; rows: 
 
 export function ApiLive({ doc, api, cap }: { doc: ReqDoc; api: ReqApi; cap: Capture }) {
   const [, bump] = useState(0)
+  const [labTab, setLabTab] = useState<'compose' | 'suite' | null>(null)
   const eps = useMemo(() => endpointsOf(cap.calls), [cap.calls])
   const { path, guessed } = pathFor(doc, api, cap.calls)
   const fields = load<FieldMap>(`reqFields:${doc.id}:${api.id}`, {})
@@ -214,6 +216,20 @@ export function ApiLive({ doc, api, cap }: { doc: ReqDoc; api: ReqApi; cap: Capt
           ))}
         </select>
         {guessed && <span className="mini-tag" title="ADB Kit đoán theo đường dẫn / tên API trong tài liệu — chọn lại nếu sai">tự ghép</span>}
+        <button
+          className="iconbtn"
+          onClick={() => setLabTab('compose')}
+          title="Mở công cụ Sửa & Gửi thử API lên Server (tự động lấy Token và Body từ lần gọi trên máy)"
+        >
+          <Send size={12} /> Sửa &amp; Gửi thử
+        </button>
+        <button
+          className="iconbtn primary"
+          onClick={() => setLabTab('suite')}
+          title="Tự động bắn bộ kịch bản kiểm thử đầu vào (Thiếu trường bắt buộc, Bỏ token, Sai kiểu dữ liệu) theo đặc tả tài liệu này"
+        >
+          <Sparkles size={12} /> Test API tự động
+        </button>
       </div>
       {fakeBlock}
       {report && !report.sample && <div className="muted rq-hint">Chưa thấy lời gọi {path} — thao tác tới màn hình dùng API này.</div>}
@@ -247,6 +263,18 @@ export function ApiLive({ doc, api, cap }: { doc: ReqDoc; api: ReqApi; cap: Capt
           {!report.inputs.length && !report.outputs.length && <div className="muted">Tài liệu không liệt kê tham số của API này.</div>}
         </div>
       )}
+      {labTab && (
+        <ApiLabModal
+          call={report?.sample ?? null}
+          initialTab={labTab}
+          calls={cap.calls}
+          pkg={cap.pkg}
+          api={api}
+          fieldMap={fields}
+          docCode={doc.code ? `PYC${doc.code}` : undefined}
+          onClose={() => setLabTab(null)}
+        />
+      )}
     </div>
   )
 }
@@ -261,7 +289,7 @@ function FakeBlock({ api, path, cap, scenarios, native }: { api: ReqApi; path: s
         <span className="muted">app nhận phản hồi giả thay vì gọi server, để test nhánh tài liệu mô tả</span>
       </div>
       {!path && <div className="muted rq-hint">Ghép API trên máy ở trên trước (giả lập áp cho đường dẫn đó).</div>}
-      {native && <div className="rq-issue">API này đọc từ Chucker (app native): đối chiếu được, nhưng không giả lập được phản hồi — giả lập chỉ áp cho WebView / miniapp.</div>}
+      {native && <div className="rq-issue">API này đọc từ Chucker (app native): giả lập phản hồi trên UI chỉ áp cho WebView / miniapp — với app native, hãy bấm <b>Sửa &amp; Gửi thử</b> hoặc <b>Test API tự động</b> ở trên để bắn thử trực tiếp lên Server bằng Token của Chucker.</div>}
       <div className="rq-scen">
         {scenarios.map((s) => (
           <button

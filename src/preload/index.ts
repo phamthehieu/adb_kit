@@ -39,6 +39,7 @@ import type { DataFile, DbResult, DbTable, MmkvEntry, PrefEntry } from '../share
 import type { AppLink, AppScreen } from '../main/applinks'
 import type { ExploreOptions, ExploreProgress } from '../main/explore'
 import type { ReqCase, ReqDoc, ReqDocInfo, ScreenScan } from '../shared/reqdoc'
+import type { ApiProbeRun, ApiRequest, ApiResponse, SavedApiItem } from '../shared/apilab'
 import type { MatrixItem } from '../shared/formfactors'
 
 export interface CrashEvent {
@@ -172,6 +173,13 @@ const api = {
     saveMockSet: (rules: MockRule[], name: string): Promise<string | null> => invoke('net:save-mock-set', rules, name),
     openMockSet: (): Promise<{ path: string; rules: MockRule[] } | null> => invoke('net:open-mock-set'),
     cut: (serial: string, seconds: number): Promise<{ until: number }> => invoke('net:cut', serial, seconds),
+    send: (req: ApiRequest): Promise<ApiResponse> => invoke('net:send', req),
+    exportKbkt: (runs: ApiProbeRun[], meta: { template: string; title: string; code: string; author: string }): Promise<string> =>
+      invoke('net:export-kbkt', runs, meta),
+    importPostman: (pkg?: string): Promise<{ path: string; name: string; items: SavedApiItem[]; vars: Record<string, string> } | null> =>
+      invoke('net:import-postman', pkg),
+    exportPostman: (name: string, items: SavedApiItem[], vars: Record<string, string>): Promise<string | null> =>
+      invoke('net:export-postman', name, items, vars),
     onCalls: (cb: (calls: NetCall[]) => void) => on('net:calls', cb),
     onInfo: (cb: (msg: string) => void) => on('net:info', cb)
   },

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Eraser, FlaskConical, ListPlus, Pause, Play, RotateCcw, WifiOff, X } from 'lucide-react'
+import { ChevronDown, ClipboardCopy, Eraser, FlaskConical, ListPlus, Pause, Play, RotateCcw, Send, Sparkles, WifiOff, X } from 'lucide-react'
 import { NET_PROFILES, callFailed, describeMock, emptyScript, type MockRule, type NetCall, type NetProfile, type Script, type Step } from '@shared/automation'
+import { requestFromCall, toCurl } from '@shared/apilab'
 import { PackagePicker } from './PackagePicker'
 import { PaneHandle } from './PaneHandle'
+import { ApiLabModal } from './ApiLabModal'
 import { ask } from '../lib/dialog'
 
 type Kind = 'all' | 'http' | 'ipc'
@@ -79,6 +81,7 @@ export function NetworkPanel({ serial }: { serial: string }) {
   const [sel, setSel] = useState<string | null>(null)
   const [info, setInfo] = useState<string[]>([])
   const [mocks, setMocksState] = useState<MockRule[]>([])
+  const [lab, setLab] = useState<{ call: NetCall | null; tab: 'compose' | 'suite' } | null>(null)
 
   const setMocks = async (rules: MockRule[]): Promise<void> => {
     try {
@@ -256,6 +259,13 @@ export function NetworkPanel({ serial }: { serial: string }) {
           {paused ? <Play size={13} /> : <Pause size={13} />}
         </button>
         <button className="iconbtn" title="Xóa danh sách" onClick={() => { setCalls(new Map()); setSel(null) }}><Eraser size={14} /></button>
+        <button
+          className="iconbtn"
+          onClick={() => setLab({ call: selected?.kind === 'http' ? selected : null, tab: 'compose' })}
+          title="Mở công cụ Bắn thử API / Dán cURL / Chạy bộ test tự động (kế thừa sẵn Token từ máy)"
+        >
+          <Send size={13} /> Bắn API / cURL
+        </button>
       </div>
       <div className="log-tools net-sim-bar">
         <button
@@ -386,6 +396,34 @@ export function NetworkPanel({ serial }: { serial: string }) {
               </b>
               {selected.page && <span className="muted">· {selected.page}</span>}
               <span className="spacer" />
+              {selected.kind === 'http' && (
+                <>
+                  <button
+                    className="iconbtn primary"
+                    onClick={() => setLab({ call: selected, tab: 'compose' })}
+                    title="Chỉnh sửa URL, Header, Body JSON của lời gọi này (giữ sẵn Token) và bắn thử lên Server"
+                  >
+                    <Send size={12} /> Sửa &amp; Gửi thử
+                  </button>
+                  <button
+                    className="iconbtn"
+                    onClick={() => setLab({ call: selected, tab: 'suite' })}
+                    title="Tự động sinh và bắn bộ test API (Thiếu trường bắt buộc, Bỏ token, Sai kiểu dữ liệu, SQLi/XSS) lên Server"
+                  >
+                    <Sparkles size={12} /> Test tự động
+                  </button>
+                  <button
+                    className="iconbtn"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(toCurl(requestFromCall(selected)))
+                      setInfo((l) => [...l.slice(-4), 'Đã copy lệnh cURL vào clipboard'])
+                    }}
+                    title="Copy lệnh cURL của request này để gửi cho Dev Backend"
+                  >
+                    <ClipboardCopy size={12} /> cURL
+                  </button>
+                </>
+              )}
               <button className="iconbtn" onClick={() => makeStep(selected)} title="Thêm bước 'Kiểm tra API' khớp lời gọi này vào kịch bản">
                 <ListPlus size={13} /> Tạo bước kiểm tra
               </button>
@@ -448,6 +486,15 @@ export function NetworkPanel({ serial }: { serial: string }) {
           </div>
         )}
       </div>
+      {lab && (
+        <ApiLabModal
+          call={lab.call}
+          initialTab={lab.tab}
+          calls={[...calls.values()]}
+          pkg={pkg}
+          onClose={() => setLab(null)}
+        />
+      )}
     </div>
   )
 }

@@ -135,6 +135,11 @@ const ADDABLE: { key: string; label: string; make: (app: string) => Step }[] = [
   { key: 'api', label: 'Kiểm tra API / lệnh được gọi', make: () => ({ type: 'api', match: '', kind: 'any', status: 0, timeoutMs: 5000 }) },
   { key: 'apiAbsent', label: 'Kiểm tra KHÔNG gọi API', make: () => ({ type: 'api', match: '', kind: 'any', absent: true, timeoutMs: 3000 }) },
   {
+    key: 'httpReq',
+    label: 'Bắn API lên Server & kiểm tra',
+    make: () => ({ type: 'httpReq', method: 'POST', url: '{{baseUrl}}/api/v1/', useLiveAuth: true, expectStatus: 200, body: '{}' })
+  },
+  {
     key: 'permCheck',
     label: 'Kiểm tra quyền đang cấp / từ chối',
     make: (app) => ({ type: 'permCheck', pkg: app, permission: 'android.permission.RECORD_AUDIO', expect: 'granted' })
@@ -674,58 +679,148 @@ export function AutomationPanel({ serial }: { serial: string }) {
         return <input className="input sm grow" value={s.url} placeholder="myapp://screen/123 hoặc https://…" onClick={stop} onChange={(e) => updateStep(i, { url: e.target.value })} />
       case 'api':
         return (
-          <>
-            <select className="input sm" value={s.kind ?? 'any'} onClick={stop} onChange={(e) => updateStep(i, { kind: e.target.value as 'any' })} title="Loại lời gọi">
-              <option value="any">HTTP hoặc lệnh</option>
-              <option value="http">HTTP</option>
-              <option value="ipc">lệnh Tauri</option>
-            </select>
-            <input
-              className="input sm grow mono"
-              value={s.match}
-              placeholder='URL / lệnh chứa… VD: /api/login, plugin:sql|select'
-              onClick={stop}
-              onChange={(e) => updateStep(i, { match: e.target.value })}
-            />
-            {!s.absent && (
-              <>
-                <select className="input sm" value={s.method ?? ''} onClick={stop} onChange={(e) => updateStep(i, { method: e.target.value || undefined })}>
+          <div className="step-f-stack" onClick={stop}>
+            <div className="step-f-row">
+              <select className="input sm" value={s.kind ?? 'any'} onChange={(e) => updateStep(i, { kind: e.target.value as 'any' })} title="Loại lời gọi">
+                <option value="any">HTTP hoặc lệnh</option>
+                <option value="http">HTTP</option>
+                <option value="ipc">lệnh Tauri</option>
+              </select>
+              {!s.absent && (
+                <select className="input sm mono" value={s.method ?? ''} onChange={(e) => updateStep(i, { method: e.target.value || undefined })} title="Phương thức HTTP">
                   <option value="">mọi method</option>
                   {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'invoke'].map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
+              )}
+              <input
+                className="input sm grow mono"
+                value={s.match}
+                placeholder="Đường dẫn URL / lệnh chứa… (VD: /api/v1/login, plugin:sql|select)"
+                onChange={(e) => updateStep(i, { match: e.target.value })}
+              />
+            </div>
+            {!s.absent && (
+              <div className="step-f-row">
+                <input
+                  className="input sm grow"
+                  value={s.bodyContains ?? ''}
+                  placeholder="Kết quả phản hồi phải chứa chữ…"
+                  onChange={(e) => updateStep(i, { bodyContains: e.target.value || undefined })}
+                />
+                <input
+                  className="input sm grow mono"
+                  value={s.jsonField ?? ''}
+                  placeholder="Kiểm tra JSON (VD: code=00, data.status=ACTIVE, data.items.length>0)"
+                  title="Kiểm tra trường JSON trong phản hồi (VD: code=00, data.status=ACTIVE, data.items.length>0)"
+                  onChange={(e) => updateStep(i, { jsonField: e.target.value || undefined })}
+                />
+              </div>
+            )}
+            <div className="step-f-row">
+              {!s.absent && (
+                <>
+                  <label className="field-inline" title="HTTP Status mong muốn (0 = mọi kết quả 2xx thành công)">
+                    Status
+                    <input
+                      className="input sm num"
+                      type="number"
+                      min={0}
+                      value={s.status ?? 0}
+                      onChange={(e) => updateStep(i, { status: +e.target.value || 0 })}
+                    />
+                  </label>
+                  <label className="field-inline" title="Thời gian phản hồi tối đa (ms) — để trống nếu không giới hạn">
+                    Phản hồi ≤
+                    <input
+                      className="input sm num"
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={s.maxMs ?? ''}
+                      placeholder="không giới hạn"
+                      onChange={(e) => updateStep(i, { maxMs: +e.target.value || undefined })}
+                    />
+                    ms
+                  </label>
+                </>
+              )}
+              <label className="field-inline" title="Chờ tối đa bao nhiêu giây để bắt được lời gọi này">
+                Chờ tối đa
+                <input
+                  className="input sm num"
+                  type="number"
+                  min={0.5}
+                  step={0.5}
+                  value={s.timeoutMs / 1000}
+                  onChange={(e) => updateStep(i, { timeoutMs: Math.round(+e.target.value * 1000) })}
+                />
+                giây
+              </label>
+            </div>
+          </div>
+        )
+      case 'httpReq':
+        return (
+          <div className="step-f-stack" onClick={stop}>
+            <div className="step-f-row">
+              <select className="input sm mono" value={s.method} onChange={(e) => updateStep(i, { method: e.target.value })}>
+                {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <input
+                className="input sm grow mono"
+                value={s.url}
+                placeholder="URL đầy đủ: https://... hoặc {{baseUrl}}/api/..."
+                onChange={(e) => updateStep(i, { url: e.target.value })}
+              />
+              <label className="check" title="Tự động đính kèm Authorization / Cookie mới nhất bắt được từ điện thoại trong lúc chạy">
+                <input type="checkbox" checked={s.useLiveAuth !== false} onChange={(e) => updateStep(i, { useLiveAuth: e.target.checked })} /> lấy Token từ máy
+              </label>
+            </div>
+            <textarea
+              className="input mono step-f-textarea"
+              rows={3}
+              value={s.body ?? ''}
+              placeholder={'Dữ liệu Body JSON gửi lên (VD: {"username": "test", "otp": "{{otp}}"})\nĐể trống nếu là request GET'}
+              onChange={(e) => updateStep(i, { body: e.target.value })}
+              spellCheck={false}
+            />
+            <div className="step-f-row">
+              <input
+                className="input sm grow mono"
+                value={s.expectBody ?? ''}
+                placeholder="Kiểm tra phản hồi: VD code=00, data.length>0 hoặc chữ cần có trong Body"
+                title="Kiểm tra trường JSON (code=00, data.length>0) hoặc chữ trong phản hồi"
+                onChange={(e) => updateStep(i, { expectBody: e.target.value || undefined })}
+              />
+              <label className="field-inline" title="HTTP status kỳ vọng (0 = mọi 2xx)">
+                Status
                 <input
                   className="input sm num"
                   type="number"
                   min={0}
-                  value={s.status ?? 0}
-                  title="Status mong muốn (0 = mọi kết quả thành công)"
-                  onClick={stop}
-                  onChange={(e) => updateStep(i, { status: +e.target.value || 0 })}
+                  value={s.expectStatus ?? 0}
+                  onChange={(e) => updateStep(i, { expectStatus: +e.target.value || 0 })}
                 />
+              </label>
+              <label className="field-inline" title="Thời gian phản hồi tối đa (ms)">
+                Phản hồi ≤
                 <input
-                  className="input sm"
-                  style={{ width: 130 }}
-                  value={s.bodyContains ?? ''}
-                  placeholder="kết quả chứa…"
-                  onClick={stop}
-                  onChange={(e) => updateStep(i, { bodyContains: e.target.value || undefined })}
+                  className="input sm num"
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={s.maxMs ?? ''}
+                  placeholder="ms"
+                  onChange={(e) => updateStep(i, { maxMs: +e.target.value || undefined })}
                 />
-              </>
-            )}
-            <input
-              className="input sm num"
-              type="number"
-              min={0.5}
-              step={0.5}
-              value={s.timeoutMs / 1000}
-              title="Chờ tối đa (giây)"
-              onClick={stop}
-              onChange={(e) => updateStep(i, { timeoutMs: Math.round(+e.target.value * 1000) })}
-            />
-            <span className="muted">giây</span>
-          </>
+                ms
+              </label>
+            </div>
+          </div>
         )
       case 'perf':
         return (
@@ -767,36 +862,42 @@ export function AutomationPanel({ serial }: { serial: string }) {
         const r = s.rule
         const setRule = (patch: Partial<MockRule>): void => updateStep(i, { rule: { ...r, ...patch } })
         return (
-          <>
-            <select className="input sm" value={r.kind} onClick={stop} onChange={(e) => setRule({ kind: e.target.value as MockRule['kind'] })}>
-              <option value="any">HTTP hoặc lệnh</option>
-              <option value="http">HTTP</option>
-              <option value="ipc">lệnh Tauri</option>
-            </select>
-            <input className="input sm grow mono" value={r.match} placeholder="URL / lệnh chứa…" onClick={stop} onChange={(e) => setRule({ match: e.target.value })} />
-            <select className="input sm" value={r.action} onClick={stop} onChange={(e) => setRule({ action: e.target.value as MockRule['action'] })}>
-              <option value="error">lỗi / mất mạng</option>
-              <option value="status">trả về status</option>
-              <option value="delay">chậm</option>
-            </select>
-            {r.action === 'status' && (
-              <input className="input sm num" type="number" min={100} max={599} value={r.status ?? 500} title="HTTP status" onClick={stop} onChange={(e) => setRule({ status: +e.target.value })} />
-            )}
-            {r.action === 'delay' ? (
-              <label className="field-inline" onClick={stop}>
-                <input className="input sm num" type="number" min={0} step={0.5} value={(r.delayMs ?? 0) / 1000} onChange={(e) => setRule({ delayMs: Math.round(+e.target.value * 1000) })} /> giây
-              </label>
-            ) : (
-              <input
-                className="input sm mono"
-                style={{ width: 150 }}
-                value={r.body ?? ''}
-                placeholder={r.action === 'error' ? 'thông báo lỗi' : 'nội dung trả về'}
-                onClick={stop}
-                onChange={(e) => setRule({ body: e.target.value })}
-              />
-            )}
-          </>
+          <div className="step-f-stack" onClick={stop}>
+            <div className="step-f-row">
+              <select className="input sm" value={r.kind} onChange={(e) => setRule({ kind: e.target.value as MockRule['kind'] })}>
+                <option value="any">HTTP hoặc lệnh</option>
+                <option value="http">HTTP</option>
+                <option value="ipc">lệnh Tauri</option>
+              </select>
+              <input className="input sm grow mono" value={r.match} placeholder="Đường dẫn URL / lệnh cần giả lập…" onChange={(e) => setRule({ match: e.target.value })} />
+            </div>
+            <div className="step-f-row">
+              <select className="input sm" value={r.action} onChange={(e) => setRule({ action: e.target.value as MockRule['action'] })}>
+                <option value="error">lỗi / mất mạng</option>
+                <option value="status">trả về status</option>
+                <option value="delay">chậm</option>
+              </select>
+              {r.action === 'status' && (
+                <label className="field-inline">
+                  Status
+                  <input className="input sm num" type="number" min={100} max={599} value={r.status ?? 500} title="HTTP status" onChange={(e) => setRule({ status: +e.target.value })} />
+                </label>
+              )}
+              {r.action === 'delay' ? (
+                <label className="field-inline">
+                  Trễ
+                  <input className="input sm num" type="number" min={0} step={0.5} value={(r.delayMs ?? 0) / 1000} onChange={(e) => setRule({ delayMs: Math.round(+e.target.value * 1000) })} /> giây
+                </label>
+              ) : (
+                <input
+                  className="input sm grow mono"
+                  value={r.body ?? ''}
+                  placeholder={r.action === 'error' ? 'Thông báo lỗi trả về…' : 'Nội dung JSON / Body trả về…'}
+                  onChange={(e) => setRule({ body: e.target.value })}
+                />
+              )}
+            </div>
+          </div>
         )
       }
       case 'permCheck':
@@ -837,17 +938,17 @@ export function AutomationPanel({ serial }: { serial: string }) {
         )
       case 'shell':
         return (
-          <>
-            <input className="input sm grow mono" value={s.cmd} placeholder="VD: settings get system screen_off_timeout" onClick={stop} onChange={(e) => updateStep(i, { cmd: e.target.value })} />
-            <input
-              className="input sm"
-              style={{ width: 140 }}
-              value={s.expect ?? ''}
-              placeholder="kết quả phải chứa…"
-              onClick={stop}
-              onChange={(e) => updateStep(i, { expect: e.target.value || undefined })}
-            />
-          </>
+          <div className="step-f-stack" onClick={stop}>
+            <div className="step-f-row">
+              <input className="input sm grow mono" value={s.cmd} placeholder="Lệnh ADB shell (VD: settings get system screen_off_timeout)" onChange={(e) => updateStep(i, { cmd: e.target.value })} />
+              <input
+                className="input sm grow"
+                value={s.expect ?? ''}
+                placeholder="Kết quả trả về phải chứa…"
+                onChange={(e) => updateStep(i, { expect: e.target.value || undefined })}
+              />
+            </div>
+          </div>
         )
       case 'screenshot':
         return <input className="input sm grow" value={s.label ?? ''} placeholder="nhãn (không bắt buộc)" onClick={stop} onChange={(e) => updateStep(i, { label: e.target.value })} />

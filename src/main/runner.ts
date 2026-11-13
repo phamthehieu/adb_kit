@@ -33,6 +33,7 @@ import type { ScrcpySession } from './scrcpy'
 import { Action, keycode, scroll, text as textMsg, touch } from '../shared/control'
 import {
   callFailed,
+  checkJsonExpr,
   describeStep,
   describeMock,
   PERF_LABEL,
@@ -49,6 +50,8 @@ import {
   type UiNode,
   type WebError
 } from '../shared/automation'
+import { applyLiveAuth, resolveEnvVars, type ApiRequest } from '../shared/apilab'
+import { sendApiRequest } from './apilab'
 import { bugReport, writeReport, type ReportData, type StepResult } from './report'
 
 /** App-ops every app touches constantly; not interesting in a "permissions used" list. */
@@ -380,7 +383,9 @@ export class Runner {
     const recorder = this.opts.recordVideo ? new ScreenRecorder(this.serial, this.dir) : null
     recorder?.start()
     let web: WebViewInspector | null = null
-    const needApi = this.opts.captureApi !== false || steps.some((s) => s.type === 'api' || s.type === 'mock' || s.type === 'reloadWebView')
+    const needApi =
+      this.opts.captureApi !== false ||
+      steps.some((s) => s.type === 'api' || s.type === 'httpReq' || s.type === 'mock' || s.type === 'reloadWebView')
     if ((this.opts.webErrors || needApi) && this.script.app) {
       const devNow = Number((await shell(this.serial, 'date +%s')).stdout.trim()) * 1000 || Date.now()
       web = new WebViewInspector(
@@ -631,6 +636,13 @@ export class Runner {
       if (c.status === undefined) return 'chưa có phản hồi'
       if (s.status ? c.status !== s.status : callFailed(c)) return `trả về ${c.status || c.error || 'lỗi'}`
       if (s.bodyContains && !(c.result ?? '').includes(s.bodyContains)) return `kết quả không chứa "${s.bodyContains}"`
+      if (s.jsonField) {
+        const jErr = checkJsonExpr(c.result, s.jsonField)
+        if (jErr) return jErr
+      }
+      if (s.maxMs && c.durationMs !== undefined && c.durationMs > s.maxMs) {
+        return `mất ${c.durationMs} ms (cho phép ≤ ${s.maxMs} ms)`
+      }
       return null
     }
     const deadline = Date.now() + s.timeoutMs
@@ -832,6 +844,57 @@ export class Runner {
       }
       case 'api':
         return this.checkApi(step)
+      case 'httpReq': {
+        if (this.chucker) await this.chucker.flush().catch(() => {})
+        const allCalls = [...this.calls.values()]
+        let req: ApiRequest = {
+          method: (step.method || 'POST').toUpperCase(),
+          url: step.url,
+          headers: (step.headers ?? [{ name: 'Content-Type', value: 'application/json', enabled: true }]).map((h) => ({ ...h })),
+          body: step.body ?? ''
+        }
+        req = resolveEnvVars(req, {}, allCalls)
+        if (step.useLiveAuth !== false) {
+          req = applyLiveAuth(req, allCalls).req
+        }
+        const t0 = Date.now()
+        const res = await sendApiRequest(req)
+        const callId = `httpReq-${it + 1}-${i + 1}-${t0}`
+        this.calls.set(callId, {
+          id: callId,
+          kind: 'http',
+          method: req.method,
+          url: req.url,
+          args: req.body || undefined,
+          status: res.status || undefined,
+          error: res.error,
+          result: res.body || undefined,
+          reqHeaders: req.headers.filter((h) => h.enabled).map((h) => ({ name: h.name, value: h.value })),
+          resHeaders: res.headers,
+          startedAt: t0,
+          durationMs: res.durationMs,
+          step: i + 1,
+          iteration: it + 1
+        })
+        if (res.error || res.status === 0) throw new StepFailed(`Lỗi gọi API: ${res.error || 'không kết nối được'}`)
+        if (step.expectStatus ? res.status !== step.expectStatus : res.status < 200 || res.status >= 300) {
+          throw new StepFailed(`HTTP ${res.status} (kỳ vọng ${step.expectStatus || '2xx'}): ${res.body.slice(0, 180)}`)
+        }
+        if (step.expectBody) {
+          const isExpr = /^[\w.[\]-]+\s*(==|!=|>=|<=|=|>|<)/.test(step.expectBody.trim())
+          if (isExpr) {
+            const jErr = checkJsonExpr(res.body, step.expectBody)
+            if (jErr) throw new StepFailed(jErr)
+          } else if (!res.body.includes(step.expectBody)) {
+            throw new StepFailed(`phản hồi không chứa "${step.expectBody}"`)
+          }
+        }
+        if (step.maxMs && res.durationMs > step.maxMs) {
+          throw new StepFailed(`API phản hồi chậm ${res.durationMs} ms (cho phép ≤ ${step.maxMs} ms)`)
+        }
+        this.log('info', `Bắn API ✓ ${req.method} ${req.url} → HTTP ${res.status} (${res.durationMs} ms)`)
+        return
+      }
       case 'permCheck': {
         const p = (await getPermissions(this.serial, step.pkg)).find((x) => x.name === step.permission)
         if (!p) throw new StepFailed(`app không khai báo quyền ${shortPerm(step.permission)}`)

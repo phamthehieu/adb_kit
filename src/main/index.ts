@@ -24,6 +24,8 @@ import { kbktNameOf, type ReqCase } from '../shared/reqdoc'
 import { readKbkt } from './kbkt'
 import { WebViewInspector } from './webview'
 import { ChuckerWatcher } from './chucker'
+import { exportApiProbeKbkt, sendApiRequest } from './apilab'
+import { exportPostmanCollection, importPostmanCollection, type ApiProbeRun, type ApiRequest, type SavedApiItem } from '../shared/apilab'
 import { getPermissions, openAppSettings, revokeAllRuntime, setAppOp, setRuntime } from './permissions'
 import { freshApp } from './freshapp'
 import { frameImage, getToken, listPages, loadPage, setToken } from './figma'
@@ -472,6 +474,44 @@ function registerInspectIpc(): void {
   ipcMain.handle('net:mocks', async (_e, rules: MockRule[]) => {
     if (!liveNet) throw new Error('Chưa theo dõi app nào')
     await liveNet.setMocks(rules)
+  })
+  ipcMain.handle('net:send', (_e, req: ApiRequest) => sendApiRequest(req))
+  ipcMain.handle(
+    'net:export-kbkt',
+    async (_e, runs: ApiProbeRun[], meta: { template: string; title: string; code: string; author: string }) => {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const dir = join(reportsRoot(), `${stamp}_KBKT-API`)
+      mkdirSync(dir, { recursive: true })
+      const template = templateFor({ template: meta.template } as Suite, templatesDir)
+      const safeName = (meta.title || 'API').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60)
+      const out = await exportApiProbeKbkt(template, join(dir, `KBKT_API_${safeName}.xlsx`), meta, runs)
+      eShell.showItemInFolder(out)
+      return out
+    }
+  )
+  ipcMain.handle('net:import-postman', async (_e, pkg?: string) => {
+    const r = await dialog.showOpenDialog(win!, {
+      title: 'Nhập Postman Collection (.json)',
+      filters: [{ name: 'Postman Collection', extensions: ['json'] }],
+      properties: ['openFile']
+    })
+    if (r.canceled || !r.filePaths[0]) return null
+    const raw = readFileSync(r.filePaths[0], 'utf8')
+    const parsed = importPostmanCollection(raw, pkg)
+    return { path: r.filePaths[0], ...parsed }
+  })
+  ipcMain.handle('net:export-postman', async (_e, name: string, items: SavedApiItem[], vars: Record<string, string>) => {
+    mkdirSync(testsDir(), { recursive: true })
+    const safe = (name || 'adbkit_api').replace(/[^\w-]+/g, '_')
+    const r = await dialog.showSaveDialog(win!, {
+      title: 'Xuất Postman Collection v2.1',
+      defaultPath: join(testsDir(), `${safe}.postman_collection.json`),
+      filters: [{ name: 'Postman Collection', extensions: ['json'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    writeFileSync(r.filePath, exportPostmanCollection(name, items, vars))
+    eShell.showItemInFolder(r.filePath)
+    return r.filePath
   })
   ipcMain.handle('auto:baselines-dir', () => {
     const dir = join(app.getPath('documents'), 'ADB Kit', 'baselines')

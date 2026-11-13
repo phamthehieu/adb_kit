@@ -61,10 +61,30 @@ export type Step =
       status?: number
       /** Text that must appear in the response / result. */
       bodyContains?: string
+      /** Dotted JSON field assertion, e.g. "code=00", "data.status=ACTIVE", "data.items.length>0". */
+      jsonField?: string
+      /** Maximum allowed response time in milliseconds (SLA check). */
+      maxMs?: number
       /** Only calls made after the previous action are considered; wait at most this long. */
       timeoutMs: number
       /** Assert that NO matching call happens. */
       absent?: boolean
+    }
+  // Active HTTP API call sent directly by the runner (with live token from the phone)
+  | {
+      type: 'httpReq'
+      method: string
+      url: string
+      headers?: { name: string; value: string; enabled: boolean }[]
+      body?: string
+      /** Automatically attach the freshest Authorization/Cookie captured from the phone. */
+      useLiveAuth?: boolean
+      /** Expected HTTP status; 0 = any 2xx response. */
+      expectStatus?: number
+      /** Substring or JSON field expression (e.g. "code=00") that must match the response. */
+      expectBody?: string
+      /** Maximum allowed latency (ms). */
+      maxMs?: number
     }
   // Visual check against a saved reference screenshot
   | {
@@ -341,7 +361,11 @@ export function expectedOf(s: Script): string {
       lines.push(
         st.absent
           ? `Không gọi API/lệnh chứa "${st.match}"`
-          : `Gọi API/lệnh chứa "${st.match}"${st.method ? ` (${st.method.toUpperCase()})` : ''} ${st.status ? `trả về ${st.status}` : 'thành công'}${st.bodyContains ? `, kết quả chứa "${st.bodyContains}"` : ''}`
+          : `Gọi API/lệnh chứa "${st.match}"${st.method ? ` (${st.method.toUpperCase()})` : ''} ${st.status ? `trả về ${st.status}` : 'thành công'}${st.bodyContains ? `, kết quả chứa "${st.bodyContains}"` : ''}${st.jsonField ? `, JSON ${st.jsonField}` : ''}${st.maxMs ? ` (≤ ${st.maxMs} ms)` : ''}`
+      )
+    else if (st.type === 'httpReq')
+      lines.push(
+        `Bắn API ${st.method} ${st.url.replace(/^https?:\/\/[^/]+/, '') || st.url} → ${st.expectStatus ? `HTTP ${st.expectStatus}` : '2xx'}${st.expectBody ? `, thoả "${st.expectBody}"` : ''}${st.maxMs ? ` (≤ ${st.maxMs} ms)` : ''}`
       )
     else if (st.type === 'permCheck') lines.push(`Quyền ${shortPerm(st.permission)} ${st.expect === 'granted' ? 'được cấp' : 'bị từ chối'}`)
     else if (st.type === 'visual') lines.push(`Màn hình giống ảnh chuẩn "${st.name}" (lệch ≤ ${st.tolerance}%)`)
@@ -607,7 +631,15 @@ export function describeStep(s: Step): string {
       if (s.status) cond.push(`status ${s.status}`)
       else cond.push('thành công')
       if (s.bodyContains) cond.push(`kết quả chứa "${s.bodyContains}"`)
+      if (s.jsonField) cond.push(`JSON ${s.jsonField}`)
+      if (s.maxMs) cond.push(`≤ ${s.maxMs} ms`)
       return `Kiểm tra gọi ${what} chứa "${s.match}" — ${cond.join(', ')} (≤ ${sec(s.timeoutMs)})`
+    }
+    case 'httpReq': {
+      const cond: string[] = [s.expectStatus ? `status ${s.expectStatus}` : '2xx']
+      if (s.expectBody) cond.push(`thoả "${s.expectBody}"`)
+      if (s.maxMs) cond.push(`≤ ${s.maxMs} ms`)
+      return `Bắn API ${s.method || 'POST'} ${s.url.replace(/^https?:\/\/[^/]+/, '') || s.url} — ${cond.join(', ')}`
     }
     case 'visual':
       return `So sánh màn hình với ảnh chuẩn "${s.name}" (lệch tối đa ${s.tolerance}%)`
@@ -703,3 +735,61 @@ export function findNode(nodes: UiNode[], s: Selector, near?: { x: number; y: nu
   }
   return hits.reduce((a, b) => (rank(b) < rank(a) ? b : a))
 }
+
+/**
+ * Evaluate a dotted JSON path expression against a JSON response string, e.g.:
+ *  - "code=00" or "data.status == ACTIVE"
+ *  - "data.items.length > 0"
+ *  - "data.token != null" or just "data.token" (non-null/non-empty)
+ * Returns null if the check passes, or a Vietnamese explanation if it fails.
+ */
+export function checkJsonExpr(body: string | undefined, expr: string): string | null {
+  const raw = expr.trim()
+  if (!raw) return null
+  if (!body) return 'phản hồi rỗng'
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return 'phản hồi không phải JSON'
+  }
+  const m = /^([\w.[\]-]+)\s*(==|!=|>=|<=|=|>|<)?\s*(.*)$/.exec(raw)
+  if (!m) return null
+  const [, path, op, wantRaw] = m
+  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
+  let cur: unknown = parsed
+  for (const p of parts) {
+    if (cur === null || cur === undefined) {
+      cur = undefined
+      break
+    }
+    if (p === 'length' && (Array.isArray(cur) || typeof cur === 'string')) {
+      cur = cur.length
+    } else if (typeof cur === 'object') {
+      cur = (cur as Record<string, unknown>)[p]
+    } else {
+      cur = undefined
+      break
+    }
+  }
+  if (!op) {
+    if (cur === undefined || cur === null || cur === '' || cur === false) {
+      return `JSON "${path}" = ${JSON.stringify(cur)} (cần có giá trị)`
+    }
+    return null
+  }
+  const want = wantRaw.trim().replace(/^["']|["']$/g, '')
+  const actualStr = cur === undefined ? 'undefined' : cur === null ? 'null' : String(cur)
+  const numActual = Number(cur)
+  const numWant = Number(want)
+  if ((op === '>' || op === '<' || op === '>=' || op === '<=') && Number.isFinite(numActual) && Number.isFinite(numWant)) {
+    const ok = op === '>' ? numActual > numWant : op === '<' ? numActual < numWant : op === '>=' ? numActual >= numWant : numActual <= numWant
+    return ok ? null : `JSON "${path}" = ${numActual} (cần ${op} ${numWant})`
+  }
+  if (op === '!=') {
+    return actualStr.toLowerCase() !== want.toLowerCase() ? null : `JSON "${path}" = "${actualStr}" (cần khác "${want}")`
+  }
+  // '=' or '=='
+  return actualStr.toLowerCase() === want.toLowerCase() ? null : `JSON "${path}" = "${actualStr}" (cần "${want}")`
+}
+
