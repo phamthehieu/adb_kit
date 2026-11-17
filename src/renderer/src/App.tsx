@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppWindow, BellRing, Bot, Bug, Eye, FlaskConical, Gauge, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
+import { UpdateChip } from './components/UpdateBox'
 import { ScreenView } from './components/ScreenView'
 import { LogcatPanel } from './components/LogcatPanel'
 import { FilesPanel } from './components/FilesPanel'
@@ -291,6 +292,7 @@ export function App() {
         onOptions={changeOptions}
         extra={
           <>
+            <UpdateChip />
             <button
               className={`iconbtn ${simple ? 'on' : ''}`}
               onClick={toggleSimple}

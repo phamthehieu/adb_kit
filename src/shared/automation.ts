@@ -406,6 +406,12 @@ export interface RunOptions {
   repeat: number
   /** Find recorded elements again before tapping (robust, ~2s per tap). */
   smartTargets: boolean
+  /**
+   * Experimental, default off: for WebView apps (debug build) look elements up in the page's DOM
+   * through DevTools instead of dumping the Android UI tree. Used only after it agreed with a
+   * normal dump once in the run; "not found" is always decided by the normal dump.
+   */
+  fastWebFind?: boolean
   stopOnCrash: boolean
   stopOnFailure: boolean
   /** Multiplier for recorded waits; 0.5 = twice as fast. */
@@ -547,7 +553,7 @@ export interface NetCall {
    * chucker: read from the app's Chucker database (native OkHttp app);
    * bridge: a mini-app's call to the native bridge (Capacitor / WindVane), incl. WVFetch HTTP.
    */
-  source?: 'chucker' | 'bridge'
+  source?: 'chucker' | 'bridge' | 'proxy'
   /** Page (mini-app) that made the call: its title or URL. */
   page?: string
   reqHeaders?: { name: string; value: string }[]

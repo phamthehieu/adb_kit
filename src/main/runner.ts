@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { adb, adbBinary, adbSpawn, deviceDetails, q, shell } from './adb'
 import { dumpUi } from './ui'
+import { centerDistance, isWebSelector, parseDisplay, webHitsToNodes, type WebUnit } from '../shared/webFind'
 import { ScreenRecorder } from './recorder'
 import { WebViewInspector } from './webview'
 import { ChuckerWatcher } from './chucker'
@@ -278,6 +279,8 @@ export class Runner {
   private webErrors: WebError[] = []
   private calls = new Map<string, NetCall>()
   private web: WebViewInspector | null = null
+  /** "Đọc nhanh WebView": unit proven by comparing with a normal dump (null = not proven yet). */
+  private webFast: { off: boolean; unit: WebUnit | null } = { off: false, unit: null }
   /** Native app with Chucker: API calls come from its database. */
   private chucker: ChuckerWatcher | null = null
   /** App memory at the end of each round (repeat > 1, performance on). */
@@ -386,7 +389,7 @@ export class Runner {
     const needApi =
       this.opts.captureApi !== false ||
       steps.some((s) => s.type === 'api' || s.type === 'httpReq' || s.type === 'mock' || s.type === 'reloadWebView')
-    if ((this.opts.webErrors || needApi) && this.script.app) {
+    if ((this.opts.webErrors || needApi || this.opts.fastWebFind) && this.script.app) {
       const devNow = Number((await shell(this.serial, 'date +%s')).stdout.trim()) * 1000 || Date.now()
       web = new WebViewInspector(
         this.serial,
@@ -602,6 +605,13 @@ export class Runner {
     let fresh = false
     for (;;) {
       this.check()
+      // Fast path: the WebView's DOM answers in tens of ms. Trusted only for "found", and only
+      // once its coordinates were proven against a normal dump in this run.
+      const web = await this.webNodes(target)
+      if (web && this.webFast.unit) {
+        const hit = findNode(web[this.webFast.unit], target, near)
+        if (hit) return hit
+      }
       if (!this.dump || this.dump.gen !== this.gen || fresh) {
         try {
           this.dump = { nodes: (await dumpUi(this.serial)).nodes, gen: this.gen }
@@ -611,11 +621,47 @@ export class Runner {
         }
       }
       const n = this.dump ? findNode(this.dump.nodes, target, near) : null
+      if (n && web && !this.webFast.unit) this.calibrateWeb(web, n, target, near)
       if (n) return n
       if (Date.now() >= deadline) return null
       fresh = true // retries must look at the screen again
       await this.wait(300)
     }
+  }
+
+  /** DOM candidates for the selector under both readings of the WebView position, or null. */
+  private async webNodes(target: Selector): Promise<Record<WebUnit, UiNode[]> | null> {
+    if (!this.opts.fastWebFind || this.webFast.off || !this.web?.connected || !isWebSelector(target)) return null
+    try {
+      const [found, disp] = await Promise.all([this.web.findInPage(target), shell(this.serial, 'dumpsys window displays', 5000)])
+      const screen = parseDisplay(disp.stdout)
+      // No focus = a dialog, permission prompt or another window covers the page: the DOM cannot see that.
+      if (!found || !screen || !found.hits.focused || !found.hits.hits.length) return null
+      return {
+        px: webHitsToNodes(found.hits, found.place, screen, 'px'),
+        dip: webHitsToNodes(found.hits, found.place, screen, 'dip')
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * First time both the DOM and the normal dump see the element: keep the reading of the WebView
+   * position that puts it at the same place (within 3% of the screen). If neither does, the fast
+   * path stays off for the rest of the run rather than risk tapping the wrong spot.
+   */
+  private calibrateWeb(web: Record<WebUnit, UiNode[]>, real: UiNode, target: Selector, near?: { x: number; y: number }): void {
+    for (const unit of ['px', 'dip'] as const) {
+      const hit = findNode(web[unit], target, near)
+      if (hit && centerDistance(hit, real) < 0.03) {
+        this.webFast.unit = unit
+        this.log('info', 'Đọc nhanh WebView: vị trí khớp với cách đọc thường — các lần tìm sau dùng DOM của WebView')
+        return
+      }
+    }
+    this.webFast.off = true
+    this.log('warn', 'Đọc nhanh WebView: vị trí không khớp với cách đọc thường — tắt cho lần chạy này, dùng cách đọc thường')
   }
 
   /**

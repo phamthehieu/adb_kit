@@ -1076,6 +1076,7 @@ export function AutomationPanel({ serial }: { serial: string }) {
           <div className="opt-col">
             <div className="opt-cap">Khi chạy</div>
             {check('smartTargets', 'Tìm lại phần tử khi bấm', 'Trước khi bấm, tìm lại phần tử theo chữ/id (chạy đúng dù giao diện xê dịch)')}
+            {opts.smartTargets && check('fastWebFind', 'Đọc nhanh WebView (thử nghiệm)', 'App WebView bản debug: tìm phần tử qua DOM của WebView thay vì đọc cả cây giao diện (~2 giây mỗi lần). Chỉ dùng sau khi vị trí đã khớp với cách đọc thường một lần trong lượt chạy; không khớp thì tự tắt')}
             {check('stopOnCrash', 'Dừng khi crash/ANR')}
             {check('stopOnFailure', 'Dừng khi kiểm tra lỗi')}
           </div>

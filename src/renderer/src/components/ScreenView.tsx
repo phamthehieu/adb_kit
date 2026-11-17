@@ -150,6 +150,10 @@ export function ScreenView(props: Props) {
   // The stream dies whenever the phone re-enumerates on USB (e.g. switching USB tethering on or
   // off). Reconnect on our own with a growing delay instead of leaving a frozen last frame.
   const retries = useRef(0)
+  // A different phone gets its own full set of retries (the previous one may have used them up).
+  useEffect(() => {
+    retries.current = 0
+  }, [serial])
   useEffect(() => {
     if (mirror.state === 'running') {
       retries.current = 0

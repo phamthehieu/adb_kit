@@ -17,6 +17,13 @@ npm run dist       # đóng gói installer Windows (electron-builder)
 - Nếu tiến trình cha có đặt `ELECTRON_RUN_AS_NODE=1` (một số extension của VS Code làm vậy) thì phải bỏ biến này đi, nếu không Electron sẽ chạy như Node thuần.
 - Muốn xem log debug của luồng mirror: đặt `ADBKIT_DEBUG=1`.
 
+## Tự cập nhật
+
+- Bản đã cài kiểm tra bản mới trên GitHub Releases một lần, khoảng 15 giây sau khi mở (bản chạy dev thì không). Có bản mới thì thanh trên cùng hiện nút **Bản mới x.y.z**; không tải hay cài gì khi chưa bấm.
+- **Windows (bộ cài) và Linux AppImage:** bấm để tải, tải xong bấm **Cài bản x.y.z** — app hỏi xác nhận rồi đóng, cài và tự mở lại. **macOS và bản `.deb`:** nút chỉ mở trang tải (bản Mac chưa ký số nên không tự thay được).
+- Kiểm tra tay: nút cài đặt (bánh răng) › **Kiểm tra bản mới**, cạnh số phiên bản đang dùng.
+- Để các máy đã cài nhận được bản mới, release phải có file `latest.yml` / `latest-mac.yml` / `latest-linux.yml` (workflow `release.yml` tự tải lên khi đẩy tag `v*`). `npm run dist*` chỉ đóng gói, không tự đăng release.
+
 ## Build cho macOS
 
 File `.dmg` chỉ build được **trên máy Mac** (hoặc runner `macos-latest` của GitHub Actions, xem `.github/workflows/release.yml`: đẩy tag `v*` là tự build Windows + Mac + Linux).
@@ -72,6 +79,7 @@ npm run dist:mac          # ra dist/ADB Kit-<version>-arm64.dmg và -x64.dmg (+ 
   - **Kiểu so khớp chữ:** `đúng y` / `chứa` / `bắt đầu bằng` (ví dụ tab "5 Từ vựng" → chứa "Từ vựng").
   - **Nếu thấy thì bấm:** dùng cho popup lúc có lúc không; không thấy thì tự bỏ qua (cảnh báo, không làm test lỗi).
   - **Tăng tốc:** các bước kiểm tra liền nhau dùng chung một lần đọc màn hình (~2 giây/lần đọc).
+  - **Đọc nhanh WebView (thử nghiệm, mặc định tắt):** với app WebView bản debug, tìm phần tử qua DOM của WebView (DevTools) thay vì đọc cả cây giao diện. Chỉ được dùng sau khi vị trí DOM báo trùng với cách đọc thường một lần trong lượt chạy (lệch quá 3% màn hình thì tự tắt cho lượt đó); "không thấy phần tử" luôn do cách đọc thường quyết định. Không dùng khi có hộp thoại / cửa sổ khác che trang, khi có nhiều WebView cùng hiện, hoặc với phần tử native (id dạng `com.app:id/...`).
   - **Quay video** (`screenrecord --bugreport`, có dấu thời gian, tự nối nhiều đoạn 3 phút) và đính kèm vào báo cáo.
   - **Bộ test (tab "Bộ test"):** gom nhiều kịch bản `.json`, mỗi kịch bản là một testcase. Có thể đặt **nhóm** (dòng vàng trong KBKT) và gắn file **CSV** để chạy một kịch bản với nhiều bộ dữ liệu (dùng `${tên_cột}` trong các bước, mỗi dòng CSV là một testcase). Có tùy chọn **chạy lại khi lỗi** (kết quả ghi vào KQ lần 2/3) và **tắt hẳn app trước mỗi testcase**. Đường dẫn trong file bộ test được lưu tương đối, nên copy cả thư mục `tests` sang máy khác vẫn chạy được.
   - **Kết quả bộ test:** `tong-hop.html` cùng file **`KBKT_<tên>.xlsx` theo mẫu KBKT của BES** (`resources/templates/template_KBKT_BES.xlsx`): D2–D5 là thông tin chung, nhóm tô vàng, Mục đích / Các bước / Kết quả mong muốn tự sinh (hoặc lấy từ nút "KBKT" trong tab Kịch bản), KQ lần 1/2/3 là P/F, cột Ghi chú có link tới báo cáo chi tiết.
@@ -129,6 +137,16 @@ App Android native (Kotlin/Java dùng OkHttp) không có WebView nên không b�
 - Bước **"Kiểm tra API"** trong kịch bản và file `api.har` của báo cáo cũng dùng được (có header).
 - Chỉ đọc bản sao của database, không ghi gì vào app. Cần app **debuggable** (bản release không đọc được).
 - Chưa hỗ trợ **giả lập lỗi API** cho app native (cần proxy + chứng chỉ).
+
+## Bắt API qua proxy (mọi app, kể cả native / bản release)
+
+Tab **Mạng / API** › **Giả lập & phát lại** › **Bắt qua proxy**. Dùng khi app không có WebView debug và không gắn Chucker.
+
+- **Cách chạy:** ADB Kit mở một proxy trên máy tính (chỉ nghe ở `127.0.0.1`), nối điện thoại tới đó bằng `adb reverse` rồi đặt proxy của **cả điện thoại** (`settings put global http_proxy`). Không cần chung Wi-Fi.
+- **Không giải mã (mặc định):** HTTP thấy đầy đủ (URL, header, nội dung gửi/nhận). HTTPS chỉ thấy **tên máy chủ**, thời gian và số byte — dòng nhãn *Kết nối*. Dùng được với mọi app, không cần cài gì lên máy.
+- **Giải mã HTTPS:** bấm **Chép chứng chỉ lên máy** (file vào `Download`, app mở Cài đặt bảo mật), tự cài ở *Cài đặt chứng chỉ từ bộ nhớ › Chứng chỉ CA*, rồi tick **Giải mã HTTPS** trước khi bật proxy. Từ Android 7, chỉ app **tin chứng chỉ người dùng cài** (thường là bản debug có `networkSecurityConfig`) mới giải mã được; app khác (bản release, app ghim chứng chỉ) sẽ lỗi mạng **một lần**, sau đó ADB Kit tự cho máy chủ đó đi thẳng không giải mã. Chứng chỉ được tạo riêng cho từng máy tính, khóa bí mật nằm trong thư mục dữ liệu của ADB Kit. Gỡ sau khi test: *Bảo mật › Thông tin xác thực tin cậy › Người dùng*.
+- **Trả lại thiết lập:** giá trị proxy cũ của máy được ghi ra đĩa trước khi đổi và trả lại khi tắt proxy, khi rời tab / đổi máy, khi đóng ADB Kit, khi điện thoại rút ra cắm lại, và ở lần mở ADB Kit kế tiếp nếu app bị tắt đột ngột. Nếu máy vẫn mất mạng: `adb shell settings put global http_proxy :0`.
+- **Giới hạn:** chưa giả lập lỗi API qua proxy; HTTP/2 được hạ về HTTP/1.1 khi giải mã; app tự bỏ qua proxy hệ thống (một số app Flutter, game) sẽ không xuất hiện.
 
 ## So với Figma (đo kích thước, khoảng cách)
 

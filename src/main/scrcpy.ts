@@ -3,10 +3,13 @@ import { Socket, connect } from 'node:net'
 import type { ChildProcess } from 'node:child_process'
 import { adb, adbSpawn } from './adb'
 import type { MirrorOptions, VideoPacket } from '../shared/types'
+import { buildScrcpyPlan } from '../shared/scrcpyArgs'
 
 /** Must match the bundled resources/scrcpy-server exactly (server checks it). */
 export const SCRCPY_VERSION = '5.0.1'
 const REMOTE_JAR = '/data/local/tmp/adbkit-scrcpy-server.jar'
+/** How long to wait for the device name + codec id after all sockets are connected. */
+const HEADER_TIMEOUT_MS = 20_000
 
 const RAW_CODEC_ID = 0x00726177 // "raw"
 const FLAG_SESSION = 1n << 63n
@@ -140,28 +143,9 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
       throw new Error('cancelled')
     }
 
-    const camera = this.opts.source === 'camera-back' || this.opts.source === 'camera-front'
-    const audio = this.opts.audio === true
-    const args = [
-      `scid=${scid}`,
-      'log_level=info',
-      'tunnel_forward=true',
-      `audio=${audio}`,
-      `control=${!camera}`,
-      `video_codec=${this.opts.codec === 'h265' ? 'h265' : 'h264'}`,
-      `max_size=${this.opts.maxSize}`,
-      `video_bit_rate=${this.opts.bitRate}`,
-      `max_fps=${this.opts.maxFps}`,
-      'stay_awake=true',
-      `clipboard_autosync=${this.opts.clipboardSync === true}`
-    ]
-    // Optional arguments are appended only when switched on, so the default command line stays
-    // identical to the known-good one.
-    if (audio) args.push('audio_codec=raw') // 48 kHz s16le stereo: no audio decoder needed on the PC
-    if (audio && camera) args.push('audio_source=mic') // "output" capture does not apply to a camera
-    if (camera) args.push('video_source=camera', `camera_facing=${this.opts.source === 'camera-front' ? 'front' : 'back'}`)
-    // Do NOT add show_touches / power_off_on_close here: on the Samsung S9 (Android 10) they
-    // made the H.264 encoder abort (SIGABRT in ACodec::reconfigEncoder4OtherApps) every time.
+    // Arguments and the sockets to open come from one place (see shared/scrcpyArgs.ts for the
+    // rules about the Samsung S9 encoder and the arguments that must always be sent).
+    const { args, sockets } = buildScrcpyPlan(scid, this.opts)
     this.proc = adbSpawn([
       '-s', s, 'shell',
       `CLASSPATH=${REMOTE_JAR} app_process / com.genymobile.scrcpy.Server ${SCRCPY_VERSION} ${args.join(' ')}`
@@ -204,20 +188,29 @@ export class ScrcpySession extends EventEmitter<ScrcpyEvents> {
 
     // Socket order on the server is video, audio, control.
     let audioReader: ByteReader | null = null
-    if (audio) {
+    if (sockets.includes('audio')) {
       this.audioSock = await openSocket(this.port)
       this.audioSock.on('error', () => {})
       audioReader = new ByteReader(this.audioSock)
     }
-    if (!camera) {
+    if (sockets.includes('control')) {
       this.control = await openSocket(this.port)
       this.control.on('error', () => {})
       void this.readDeviceMessages(new ByteReader(this.control))
     }
 
-    const nameBuf = await reader.read(64)
+    // The server sends the device name only once every socket it expects is connected, and the
+    // codec id once capture starts. Without a limit a mismatch leaves the mirror "starting" forever.
+    const header = await Promise.race([
+      reader.read(68),
+      delay(HEADER_TIMEOUT_MS).then(() =>
+        Promise.reject(new Error(`scrcpy server did not start the video stream within ${HEADER_TIMEOUT_MS / 1000}s
+${this.serverLog.trim()}`))
+      )
+    ])
+    const nameBuf = header.subarray(0, 64)
     const deviceName = nameBuf.subarray(0, Math.max(0, nameBuf.indexOf(0))).toString('utf8') || s
-    const codecId = (await reader.read(4)).readUInt32BE(0)
+    const codecId = header.readUInt32BE(64)
     if (codecId === 0 || codecId === 1) throw new Error(`device disabled the video stream\n${this.serverLog}`)
 
     dbg('ready ' + deviceName)

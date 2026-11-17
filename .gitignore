@@ -2,3 +2,5 @@ node_modules
 out
 dist
 .figma-token
+# Internal requirement documents must not go to the public repo
+/*.docx

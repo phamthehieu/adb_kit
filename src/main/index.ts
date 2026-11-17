@@ -6,7 +6,10 @@ import { adb, adbBinary, adbPath, adbVersion, deviceDetails, installPlatformTool
 // ADB Kit's own platform-tools copy (downloaded on demand) lives in the user data folder.
 setOwnToolsDir(app.getPath('userData'))
 setStateRoot(join(app.getPath('userData'), 'appstates'))
+setProxyRoot(join(app.getPath('userData'), 'proxy'))
 import { ScrcpySession } from './scrcpy'
+import { checkForUpdate, downloadUpdate, initUpdater, installUpdate, updateInfo } from './updater'
+import { proxyDevicesSeen, proxyStatus, pushProxyCa, setProxyRoot, startPhoneProxy, stopPhoneProxy } from './proxyPhone'
 import { CrashWatcher, Runner, setBaselinesRoot, type Crash } from './runner'
 import { parseCli, runCli } from './cli'
 import { dumpUi } from './ui'
@@ -90,6 +93,8 @@ async function pollDevices(): Promise<void> {
       lastDevices = json
       send('devices', list)
     }
+    // Never leave a phone pointing at a proxy that is gone (see proxyPhone.ts).
+    await proxyDevicesSeen(list.filter((d) => d.state === 'device').map((d) => d.serial))
   } catch {
     /* adb server restarting; try again next tick */
   } finally {
@@ -435,6 +440,12 @@ function registerInspectIpc(): void {
     liveNet = insp
     insp.start()
   })
+  ipcMain.handle('proxy:start', (_e, serial: string, decrypt: boolean) =>
+    startPhoneProxy(serial, decrypt, { onCall: (c) => netQueue.push(c), onInfo: (m) => send('net:info', m) })
+  )
+  ipcMain.handle('proxy:stop', () => stopPhoneProxy())
+  ipcMain.handle('proxy:status', () => proxyStatus())
+  ipcMain.handle('proxy:cert', (_e, serial: string) => pushProxyCa(serial))
   ipcMain.handle('net:stop', async () => {
     await liveNet?.stop()
     liveNet = null
@@ -874,6 +885,10 @@ function registerAutomationIpc(): void {
 function registerIpc(): void {
   registerAutomationIpc()
   ipcMain.handle('adb:info', async () => ({ path: adbPath(), version: await adbVersion() }))
+  ipcMain.handle('update:info', () => updateInfo())
+  ipcMain.handle('update:check', () => checkForUpdate(true))
+  ipcMain.handle('update:download', () => downloadUpdate())
+  ipcMain.handle('update:install', () => installUpdate())
   ipcMain.handle('adb:install', async () => {
     const path = await installPlatformTools()
     await pollDevices()
@@ -1042,15 +1057,18 @@ app.whenReady().then(async () => {
   }
   registerIpc()
   createWindow()
+  initUpdater((s) => send('update:state', s))
 })
 
 let quitCleaned = false
 app.on('before-quit', (e) => {
   // Give the phone its settings back (and sleep it if asked) before the process exits.
-  if (!quitCleaned && mirror && (touchesOnFor || mirrorOpts?.powerOffOnClose)) {
+  const mirrorCleanup = !!mirror && (!!touchesOnFor || !!mirrorOpts?.powerOffOnClose)
+  if (!quitCleaned && (mirrorCleanup || proxyStatus())) {
     e.preventDefault()
     quitCleaned = true
-    void endMirror().finally(() => app.quit())
+    // The phone must not keep a proxy that dies with this process.
+    void Promise.allSettled([mirrorCleanup ? endMirror() : null, stopPhoneProxy()]).finally(() => app.quit())
     return
   }
   runner?.stop()

@@ -27,6 +27,8 @@ import type {
   UiNode
 } from '../shared/automation'
 import type { FPage, FPageRef } from '../shared/figma'
+import type { UpdateInfo, UpdateState } from '../shared/update'
+import type { ProxyStatus } from '../shared/proxy'
 import type { AppStateMeta, AppStateResult } from '../shared/appstate'
 import type { EvidenceInput, EvidenceResult } from '../shared/manual'
 import type { StressResult, StressStatus } from '../shared/stress'
@@ -316,6 +318,22 @@ const api = {
       invoke('req:export-kbkt', id, cases, meta)
   },
   openPath: (path: string): Promise<string> => invoke('os:open', path),
+  /** Capturing proxy for any app (changes the phone's global HTTP proxy; always restored). */
+  proxy: {
+    start: (serial: string, decrypt: boolean): Promise<ProxyStatus> => invoke('proxy:start', serial, decrypt),
+    stop: (): Promise<boolean> => invoke('proxy:stop'),
+    status: (): Promise<ProxyStatus | null> => invoke('proxy:status'),
+    /** Copies the CA certificate to the phone's Download folder and opens the security settings. */
+    pushCert: (serial: string): Promise<string> => invoke('proxy:cert', serial)
+  },
+  /** In-app update (GitHub Releases). Nothing is downloaded or installed without a click. */
+  update: {
+    info: (): Promise<UpdateInfo> => invoke('update:info'),
+    check: (): Promise<UpdateInfo> => invoke('update:check'),
+    download: (): Promise<void> => invoke('update:download'),
+    install: (): Promise<void> => invoke('update:install'),
+    onState: (cb: (s: UpdateState) => void) => on('update:state', cb)
+  },
 
   /** Absolute path of a File from a drag & drop event. */
   pathForFile: (f: File): string => webUtils.getPathForFile(f)

@@ -2,7 +2,8 @@ import { adb, shell } from './adb'
 import { pidsOf } from './services'
 import { TAURI_HOOK_SCRIPT, TAURI_MARK } from './tauriHook'
 import { CAP_HOOK_SCRIPT, CAP_MARK } from './bridgeHook'
-import type { MockRule, NetCall, NetProfile, WebError } from '../shared/automation'
+import type { MockRule, NetCall, NetProfile, Selector, WebError } from '../shared/automation'
+import { parsePlacement, parseWebHits, webFindExpression, type WebHits, type WebViewPlacement } from '../shared/webFind'
 
 type Found = Omit<WebError, 'step' | 'iteration'>
 
@@ -298,6 +299,35 @@ export class WebViewInspector {
     }
     ws.addEventListener('close', drop)
     ws.addEventListener('error', drop)
+  }
+
+  /**
+   * "Đọc nhanh WebView": look for an element in the DOM of the page that is on screen. Read-only.
+   * Returns null whenever the answer could be ambiguous (no page or several pages on screen,
+   * page still connecting, DevTools silent) so the caller falls back to the normal UI dump.
+   */
+  async findInPage(sel: Selector): Promise<{ hits: WebHits; place: WebViewPlacement } | null> {
+    try {
+      const onScreen: { id: string; place: WebViewPlacement }[] = []
+      for (const port of this.ports.values()) {
+        const res = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(1500) })
+        for (const p of (await res.json()) as { id: string; type: string; description?: string }[]) {
+          const place = p.type === 'page' ? parsePlacement(p.description) : null
+          if (place) onScreen.push({ id: p.id, place })
+        }
+      }
+      if (onScreen.length !== 1) return null
+      const s = this.sockets.get(onScreen[0].id)
+      if (!s || s.ws.readyState !== WebSocket.OPEN) return null
+      const r = await Promise.race([
+        s.send('Runtime.evaluate', { expression: webFindExpression(sel), returnByValue: true }),
+        new Promise<CdpMessage>((done) => setTimeout(() => done({}), 2000))
+      ])
+      const hits = parseWebHits(r.result?.result?.value)
+      return hits ? { hits, place: onScreen[0].place } : null
+    } catch {
+      return null
+    }
   }
 
   /** Reload the app's page (= restart its UI) so calls made at startup are captured too. */

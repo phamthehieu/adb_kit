@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Settings2, Smartphone, Usb, Wifi } from 'lucide-react'
 import type { CmdResult, DeviceInfo, MirrorOptions } from '@shared/types'
+import { UpdateRow } from './UpdateBox'
 
 function usePopover(): [boolean, (v: boolean) => void, React.RefObject<HTMLDivElement | null>] {
   const [open, setOpen] = useState(false)
@@ -194,6 +195,7 @@ function SettingsButton({ options, onOptions }: { options: MirrorOptions; onOpti
             Tắt màn hình điện thoại khi đóng mirror
           </label>
           <div className="note">Đổi giá trị sẽ khởi động lại mirror.</div>
+          <UpdateRow />
         </div>
       )}
     </div>

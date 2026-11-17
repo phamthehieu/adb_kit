@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ClipboardCopy, Eraser, FlaskConical, ListPlus, Pause, Play, RotateCcw, Send, Sparkles, WifiOff, X } from 'lucide-react'
 import { NET_PROFILES, callFailed, describeMock, emptyScript, type MockRule, type NetCall, type NetProfile, type Script, type Step } from '@shared/automation'
 import { requestFromCall, toCurl } from '@shared/apilab'
+import { PROXY_RESET_COMMAND, type ProxyStatus } from '@shared/proxy'
 import { PackagePicker } from './PackagePicker'
 import { PaneHandle } from './PaneHandle'
 import { ApiLabModal } from './ApiLabModal'
@@ -42,6 +43,7 @@ function ruleFrom(c: NetCall): MockRule | null {
 function kindLabel(c: NetCall): string {
   if (c.source === 'bridge') return c.kind === 'http' ? 'HTTP·Bridge' : c.method === 'event' ? 'Sự kiện' : 'Bridge'
   if (c.kind === 'ipc') return 'Lệnh'
+  if (c.source === 'proxy') return c.resourceType === 'tunnel' ? 'Kết nối' : c.resourceType === 'WebSocket' ? 'WS·Proxy' : 'HTTP·Proxy'
   return c.viaTauri ? 'HTTP·Rust' : c.source === 'chucker' ? 'HTTP·App' : 'HTTP'
 }
 
@@ -221,6 +223,55 @@ export function NetworkPanel({ serial }: { serial: string }) {
     setInfo((l) => [...l.slice(-4), `Đã thêm bước "Kiểm tra API ${match}" vào kịch bản (tab Tự động test)`])
   }
 
+  // Capturing proxy: works for any app, but changes the phone's global proxy while it is on.
+  const [proxy, setProxy] = useState<ProxyStatus | null>(null)
+  const [proxyDecrypt, setProxyDecrypt] = useState(() => localStorage.getItem('netProxyDecrypt') === '1')
+  const [proxyBusy, setProxyBusy] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void window.api.proxy.status().then((s) => alive && setProxy(s && s.serial === serial ? s : null))
+    return () => {
+      alive = false
+      void window.api.proxy.stop() // never keep the phone on the proxy after leaving this panel / phone
+    }
+  }, [serial])
+  const note = (m: string): void => setInfo((l) => [...l.slice(-4), m])
+  const toggleProxy = async (): Promise<void> => {
+    setProxyBusy(true)
+    try {
+      if (proxy) {
+        const ok = await window.api.proxy.stop()
+        setProxy(null)
+        note(ok ? 'Đã tắt proxy và trả lại thiết lập mạng cũ của điện thoại' : `Chưa trả lại được thiết lập proxy (máy mất kết nối). ADB Kit sẽ tự trả khi thấy lại máy; hoặc chạy: ${PROXY_RESET_COMMAND}`)
+        return
+      }
+      const ok = await ask(
+        `Bật proxy sẽ đổi thiết lập proxy của CẢ điện thoại: mọi app đi mạng qua ADB Kit trên máy tính này cho tới khi bạn tắt.${proxyDecrypt ? ' Đang chọn giải mã HTTPS: app không tin chứng chỉ của ADB Kit sẽ lỗi mạng một lần rồi tự chạy lại bình thường.' : ''} Thiết lập cũ được trả lại khi tắt proxy, khi đóng ADB Kit hoặc khi máy kết nối lại.`,
+        { ok: 'Bật proxy' }
+      )
+      if (!ok) return
+      localStorage.setItem('netProxyDecrypt', proxyDecrypt ? '1' : '0')
+      setProxy(await window.api.proxy.start(serial, proxyDecrypt))
+      note(proxyDecrypt ? 'Proxy đã bật, có giải mã HTTPS cho app tin chứng chỉ của ADB Kit' : 'Proxy đã bật: HTTP thấy đầy đủ, HTTPS chỉ thấy tên máy chủ')
+    } catch (e) {
+      setProxy(null)
+      note(`Không bật được proxy: ${(e as Error).message}`)
+    } finally {
+      setProxyBusy(false)
+    }
+  }
+  const pushCert = async (): Promise<void> => {
+    setProxyBusy(true)
+    try {
+      const path = await window.api.proxy.pushCert(serial)
+      note(`Đã chép chứng chỉ vào ${path}. Trên máy: Cài đặt › Bảo mật › Cài đặt chứng chỉ từ bộ nhớ › Chứng chỉ CA, chọn file này. Gỡ sau khi test: Bảo mật › Thông tin xác thực tin cậy › Người dùng.`)
+    } catch (e) {
+      note((e as Error).message)
+    } finally {
+      setProxyBusy(false)
+    }
+  }
+
   const stop = async (): Promise<void> => {
     await window.api.net.stop()
     setRunning(false)
@@ -281,7 +332,8 @@ export function NetworkPanel({ serial }: { serial: string }) {
         </button>
         {profile && <span className="mini-tag bad">Đang giả lập: {NET_PROFILES[profile].label}</span>}
         {cutLeft > 0 && <span className="mini-tag bad">Đang mất mạng… {cutLeft}s</span>}
-        {!simOpen && !profile && !cutLeft && <span className="muted">Mạng bình thường</span>}
+        {proxy && <span className="mini-tag bad">Proxy đang bật{proxy.decrypt ? ' (giải mã HTTPS)' : ''}</span>}
+        {!simOpen && !profile && !cutLeft && !proxy && <span className="muted">Mạng bình thường</span>}
       </div>
       {simOpen && (
         <div className="net-sim-box">
@@ -315,6 +367,29 @@ export function NetworkPanel({ serial }: { serial: string }) {
               </button>
             </div>
             <div className="sim-hint">Cho app nhận lại đúng các phản hồi vừa ghi, không phụ thuộc server.</div>
+          </div>
+          <div className="sim-group danger">
+            <div className="opt-cap">Bắt qua proxy (mọi app, kể cả native)</div>
+            <div className="sim-row">
+              <button
+                className={`iconbtn ${proxy ? 'on' : 'danger-outline'}`}
+                disabled={proxyBusy}
+                onClick={() => void toggleProxy()}
+                title="Cho mọi kết nối HTTP của điện thoại đi qua ADB Kit (adb reverse). Đổi thiết lập proxy của cả máy; tự trả lại khi tắt, khi đóng ADB Kit hoặc khi máy kết nối lại."
+              >
+                {proxy ? 'Tắt proxy' : 'Bật proxy'}
+              </button>
+              <label className="field-inline" title="Giải mã HTTPS bằng chứng chỉ của ADB Kit. Chỉ app tin chứng chỉ người dùng cài (thường là bản debug) mới giải mã được; app khác tự chuyển về chỉ xem tên máy chủ.">
+                <input type="checkbox" checked={proxyDecrypt} disabled={!!proxy || proxyBusy} onChange={(e) => setProxyDecrypt(e.target.checked)} />
+                Giải mã HTTPS
+              </label>
+              <button className="iconbtn" disabled={proxyBusy} onClick={() => void pushCert()} title="Chép chứng chỉ vào thư mục Download của máy và mở Cài đặt bảo mật để bạn tự cài">
+                Chép chứng chỉ lên máy
+              </button>
+            </div>
+            <div className="sim-hint">
+              Đổi proxy của <b>cả điện thoại</b>; tự trả lại khi tắt. Không giải mã: HTTP thấy đầy đủ, HTTPS chỉ thấy tên máy chủ. Nếu máy mất mạng sau sự cố, chạy <code>{PROXY_RESET_COMMAND}</code>.
+            </div>
           </div>
           <div className="sim-group danger">
             <div className="opt-cap">Ngắt mạng thật cả máy</div>
