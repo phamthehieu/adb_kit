@@ -4,3 +4,6 @@ dist
 .figma-token
 # Internal requirement documents must not go to the public repo
 /*.docx
+
+# Android build output of the desk app (the signed APK lives in resources/)
+/android/desk/build

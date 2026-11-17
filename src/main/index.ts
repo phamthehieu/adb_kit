@@ -10,6 +10,8 @@ setProxyRoot(join(app.getPath('userData'), 'proxy'))
 import { ScrcpySession } from './scrcpy'
 import { checkForUpdate, downloadUpdate, initUpdater, installUpdate, updateInfo } from './updater'
 import { proxyDevicesSeen, proxyStatus, pushProxyCa, setProxyRoot, startPhoneProxy, stopPhoneProxy } from './proxyPhone'
+import { deskDevicesSeen, deskSnapshot, deskStatus, setDeskApk, setDeskConfig, setDeskHelper, startDesk, stopDesk, uninstallDeskApp } from './desk'
+import type { DeskConfig } from '../shared/desk'
 import { CrashWatcher, Runner, setBaselinesRoot, type Crash } from './runner'
 import { parseCli, runCli } from './cli'
 import { dumpUi } from './ui'
@@ -94,7 +96,9 @@ async function pollDevices(): Promise<void> {
       send('devices', list)
     }
     // Never leave a phone pointing at a proxy that is gone (see proxyPhone.ts).
-    await proxyDevicesSeen(list.filter((d) => d.state === 'device').map((d) => d.serial))
+    const ready = list.filter((d) => d.state === 'device').map((d) => d.serial)
+    await proxyDevicesSeen(ready)
+    await deskDevicesSeen(ready)
   } catch {
     /* adb server restarting; try again next tick */
   } finally {
@@ -216,7 +220,9 @@ const testsDir = (): string => join(app.getPath('documents'), 'ADB Kit', 'tests'
 /** Evidence of manual test results (one folder per KBKT file, then per test case). */
 const testTayRoot = (): string => join(app.getPath('documents'), 'ADB Kit', 'test-tay')
 /** Bundled KBKT templates (BES, BCCS). */
-const templatesDir = app.isPackaged ? join(process.resourcesPath, 'resources', 'templates') : join(app.getAppPath(), 'resources', 'templates')
+setDeskApk(join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'adbkit-desk.apk'))
+setDeskHelper(join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'desk-helper.ps1'))
+const templatesDir =app.isPackaged ? join(process.resourcesPath, 'resources', 'templates') : join(app.getAppPath(), 'resources', 'templates')
 
 function scriptInfo(path: string): { path: string; name: string; app: string; steps: number; error?: string } {
   try {
@@ -446,6 +452,11 @@ function registerInspectIpc(): void {
   ipcMain.handle('proxy:stop', () => stopPhoneProxy())
   ipcMain.handle('proxy:status', () => proxyStatus())
   ipcMain.handle('proxy:cert', (_e, serial: string) => pushProxyCa(serial))
+  ipcMain.handle('desk:start', (_e, serial: string, config: Partial<DeskConfig>) => startDesk(serial, config))
+  ipcMain.handle('desk:stop', () => stopDesk())
+  ipcMain.handle('desk:uninstall', (_e, serial: string) => uninstallDeskApp(serial))
+  ipcMain.handle('desk:config', (_e, config: Partial<DeskConfig>) => setDeskConfig(config))
+  ipcMain.handle('desk:state', () => ({ status: deskStatus(), snapshot: deskSnapshot() }))
   ipcMain.handle('net:stop', async () => {
     await liveNet?.stop()
     liveNet = null
@@ -1066,11 +1077,11 @@ let quitCleaned = false
 app.on('before-quit', (e) => {
   // Give the phone its settings back (and sleep it if asked) before the process exits.
   const mirrorCleanup = !!mirror && (!!touchesOnFor || !!mirrorOpts?.powerOffOnClose)
-  if (!quitCleaned && (mirrorCleanup || proxyStatus())) {
+  if (!quitCleaned && (mirrorCleanup || proxyStatus() || deskStatus())) {
     e.preventDefault()
     quitCleaned = true
     // The phone must not keep a proxy that dies with this process.
-    void Promise.allSettled([mirrorCleanup ? endMirror() : null, stopPhoneProxy()]).finally(() => app.quit())
+    void Promise.allSettled([mirrorCleanup ? endMirror() : null, stopPhoneProxy(), stopDesk('quit')]).finally(() => app.quit())
     return
   }
   runner?.stop()

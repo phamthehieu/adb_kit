@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, BellRing, Bot, Bug, Eye, FlaskConical, Gauge, Hammer, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
+import { AppWindow, BellRing, Bot, Bug, Eye, FlaskConical, Gauge, Hammer, MonitorSmartphone, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
 import { UpdateChip } from './components/UpdateBox'
@@ -31,13 +31,14 @@ import { PanelFrame } from './components/PanelFrame'
 import { StressPanel } from './components/StressPanel'
 import { PerfPanel } from './components/PerfPanel'
 import { PushPanel } from './components/PushPanel'
+import { DeskPanel } from './components/DeskPanel'
 import { Launchpad } from './components/Launchpad'
 import { DialogHost, tell } from './lib/dialog'
 import { withTransition } from './lib/motion'
 
-type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req' | 'stress' | 'perf' | 'push'
+type Panel = 'none' | 'files' | 'logcat' | 'shell' | 'install' | 'auto' | 'net' | 'perm' | 'figma' | 'mini' | 'check' | 'help' | 'data' | 'req' | 'stress' | 'perf' | 'push' | 'desk'
 const LEFT_PANELS: Panel[] = ['files', 'perm']
-const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req', 'stress', 'perf', 'push']
+const RIGHT_PANELS: Panel[] = ['logcat', 'shell', 'auto', 'net', 'figma', 'mini', 'check', 'help', 'data', 'req', 'stress', 'perf', 'push', 'desk']
 /** "Chế độ đơn giản" (BA, PM, người mới): only tools that read or test, nothing that changes the phone's settings or data. */
 const SIMPLE_PANELS: Panel[] = ['auto', 'req', 'check', 'figma', 'perf', 'logcat', 'help']
 type Status = { text: string; error?: boolean; path?: string } | null
@@ -52,6 +53,7 @@ const FRAMES: Partial<Record<Panel, { icon: React.ReactNode; title: string; desc
   stress: { icon: <Hammer size={16} />, title: 'Độ bền', desc: 'Giết tiến trình, thiếu RAM, Doze, đổi ngôn ngữ / giờ, đầy bộ nhớ — bắt lỗi chỉ có ở máy người dùng', help: 'stress' },
   perf: { icon: <Gauge size={16} />, title: 'Hiệu năng', desc: 'RAM, CPU, khung hình và pin của app theo thời gian thực; đánh dấu và lưu ra Excel', help: 'perf' },
   push: { icon: <BellRing size={16} />, title: 'Thông báo', desc: 'Đăng thông báo thử lên máy và xem app mở đúng màn hình khi chạm — không cần server', help: 'push' },
+  desk: { icon: <MonitorSmartphone size={16} />, title: 'Bảng theo dõi', desc: 'Lúc không test, điện thoại hiện đồng hồ, CPU, RAM, GPU, mạng, nhạc, CI và token AI của máy tính', help: 'desk' },
   perm: { icon: <ShieldCheck size={16} />, title: 'Quyền của app', desc: 'Bật/tắt quyền, cấp hết, đưa app về như mới cài', help: 'perm' },
   mini: { icon: <AppWindow size={16} />, title: 'Miniapp', desc: 'Soi WebView, mở DevTools, miniapp đã tải, mở link nhanh', help: 'mini' },
   auto: { icon: <Bot size={16} />, title: 'Tự động test', desc: 'Ghi thao tác thành kịch bản, chạy lại, xuất báo cáo và KBKT', help: 'auto' },
@@ -338,6 +340,7 @@ export function App() {
           {tool('files', <FolderTree size={14} />, 'Tệp')}
           {tool('logcat', <ScrollText size={14} />, 'Logcat')}
           {tool('shell', <SquareTerminal size={14} />, 'Shell')}
+          {tool('desk', <MonitorSmartphone size={14} />, 'Bảng theo dõi')}
         </div>
         {!simple && (
           <div className="tgroup" role="group" aria-label="Gỡ lỗi">
@@ -492,6 +495,7 @@ export function App() {
             {panel === 'req' && frame('req', <ErrorBoundary key="req" name="Panel Tài liệu yêu cầu" className="panel wide"><ReqPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'perf' && frame('perf', <ErrorBoundary key="perf" name="Panel Hiệu năng" className="panel wide"><PerfPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'push' && frame('push', <ErrorBoundary key="push" name="Panel Thông báo" className="panel wide"><PushPanel serial={device.serial} /></ErrorBoundary>)}
+            {panel === 'desk' && frame('desk', <ErrorBoundary key="desk" name="Panel Bảng theo dõi" className="panel wide"><DeskPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'stress' && frame('stress', <ErrorBoundary key="stress" name="Panel Độ bền" className="panel wide"><StressPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'check' && frame('check', <ErrorBoundary key="check" name="Panel Soát UI" className="panel wide"><CheckPanel serial={device.serial} /></ErrorBoundary>)}
             {panel === 'mini' &&

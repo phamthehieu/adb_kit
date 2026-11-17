@@ -29,6 +29,7 @@ import type {
 import type { FPage, FPageRef } from '../shared/figma'
 import type { UpdateInfo, UpdateState } from '../shared/update'
 import type { ProxyStatus } from '../shared/proxy'
+import type { DeskConfig, DeskSnapshot, DeskStatus } from '../shared/desk'
 import type { AppStateMeta, AppStateResult } from '../shared/appstate'
 import type { EvidenceInput, EvidenceResult } from '../shared/manual'
 import type { StressResult, StressStatus } from '../shared/stress'
@@ -325,6 +326,15 @@ const api = {
     status: (): Promise<ProxyStatus | null> => invoke('proxy:status'),
     /** Copies the CA certificate to the phone's Download folder and opens the security settings. */
     pushCert: (serial: string): Promise<string> => invoke('proxy:cert', serial)
+  },
+  /** "Bảng theo dõi": the phone's browser shows live information about this PC (display only). */
+  desk: {
+    start: (serial: string, config: DeskConfig): Promise<DeskStatus> => invoke('desk:start', serial, config),
+    stop: (): Promise<void> => invoke('desk:stop'),
+    /** Removes ADB Kit's viewer app from the phone. */
+    uninstall: (serial: string): Promise<string> => invoke('desk:uninstall', serial),
+    setConfig: (config: DeskConfig): Promise<void> => invoke('desk:config', config),
+    state: (): Promise<{ status: DeskStatus | null; snapshot: DeskSnapshot | null }> => invoke('desk:state')
   },
   /** In-app update (GitHub Releases). Nothing is downloaded or installed without a click. */
   update: {

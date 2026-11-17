@@ -5,7 +5,7 @@
  */
 
 /** Panels a tour step can open (same ids as App's panels). */
-export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req' | 'stress' | 'perf' | 'push'
+export type HelpPanel = 'none' | 'files' | 'logcat' | 'shell' | 'net' | 'perm' | 'auto' | 'figma' | 'mini' | 'check' | 'help' | 'install' | 'data' | 'req' | 'stress' | 'perf' | 'push' | 'desk'
 
 /** Where a step points: a CSS selector, or a button / label whose text contains `text`. */
 export type Target = string | { text: string; within?: string }
@@ -719,6 +719,49 @@ export const TOPICS: HelpTopic[] = [
     tour: [
       { target: tool('push'), panel: 'push', title: 'Thông báo', body: 'Đăng thông báo thử và xem app xử lý khi chạm.' },
       { target: '.pu-body', panel: 'push', title: 'Ba bước', body: 'Nội dung → khi chạm vào → thử.' }
+    ]
+  },
+
+  {
+    id: 'desk',
+    group: 'Cơ bản',
+    title: 'Bảng theo dõi: điện thoại làm màn hình phụ',
+    summary: 'Lúc máy cắm dây mà không test, cho nó hiện đồng hồ, CPU, RAM, GPU, mạng, nhạc, CI và token AI của máy tính',
+    when: [
+      'Điện thoại test đang cắm trên bàn nhưng chưa dùng tới.',
+      'Muốn liếc nhanh CPU, RAM hoặc số token Claude Code đã dùng mà không mở thêm cửa sổ.'
+    ],
+    steps: [
+      'Mở tab Bảng theo dõi, tick các thông tin muốn hiện.',
+      'Chọn cách hiện: "App của ADB Kit" (toàn màn hình thật) hoặc "Trình duyệt" (không cài gì).',
+      'Bấm "Bật bảng theo dõi". Lần đầu với cách "App", ADB Kit cài một app nhỏ lên máy rồi mở nó; màn hình tự giữ sáng.',
+      'Muốn dùng máy để test: bấm Home trên điện thoại, hoặc bấm "Tắt bảng theo dõi".'
+    ],
+    buttons: [
+      ['Bật / Tắt bảng theo dõi', 'Mở bảng trên điện thoại, hoặc ngắt đường nối. Khi tắt, app hiển thị tự đóng; nếu dùng trình duyệt thì trang báo mất kết nối, đóng tab là xong.'],
+      ['App của ADB Kit / Trình duyệt', 'App: toàn màn hình thật, không thanh địa chỉ. Trình duyệt: không cài gì, ADB Kit chạm một lần vào giữa màn hình để vào toàn màn hình.'],
+      ['Gỡ app khỏi điện thoại', 'Gỡ app "ADB Kit Bảng theo dõi" (dev.adbkit.desk) khỏi máy đang chọn.'],
+      ['Độ sáng trang', 'Làm tối nội dung trang để đỡ chói và đỡ lưu ảnh trên màn hình cũ. Không đổi độ sáng của điện thoại.'],
+      ['GPU, Tốc độ mạng, Pin laptop', 'Lấy từ Windows (mạng và pin có cả trên Linux). Thứ nào máy tính không có, ví dụ pin trên máy bàn, thì ô đó tự ẩn.'],
+      ['Nhạc đang phát', 'Tên bài, ca sĩ, tiến độ của bài đang phát trên máy tính (Windows). Không có gì đang phát thì ô tự ẩn.'],
+      ['Trạng thái build CI', 'Nhập repo GitHub dạng chủ/repo. Bảng hiện lần chạy GitHub Actions mới nhất: thành công, thất bại hay đang chạy.'],
+      ['Token AI', 'Số token đã dùng hôm nay và trong 5 giờ qua của Claude Code và Antigravity (Gemini), mỗi công cụ một dòng, đọc từ nhật ký của chúng trên máy tính này. Công cụ chưa từng dùng trên máy thì không hiện.']
+    ],
+    faq: [
+      ['Có cài gì lên điện thoại không?', 'Cách "App" cài một app nhỏ (khoảng 25 KB, chỉ xin quyền mạng, chỉ mở được trang của ADB Kit trên 127.0.0.1). Cách "Trình duyệt" không cài gì. Cả hai đều không đổi cài đặt nào của máy.'],
+      ['Không cài được app', 'Một số máy (Xiaomi, Oppo…) cần bật "Cài đặt qua USB" trong Tùy chọn nhà phát triển. Hoặc chọn cách "Trình duyệt".'],
+      ['Điện thoại điều khiển được máy tính không?', 'Không. Trang chỉ hiển thị, không gửi lệnh nào về máy tính.'],
+      ['Token có phải hạn mức còn lại không?', 'Không. Đó là số token đã dùng trên máy này. Các công cụ AI không ghi hạn mức còn lại ra máy.'],
+      ['Không thấy Codex, Copilot, Cursor', 'Hiện mới đọc được Claude Code và Antigravity. Công cụ khác sẽ thêm khi biết chắc chúng ghi token ở đâu.'],
+      ['Không thấy ô nhạc', 'Phải có một bài đang phát hoặc tạm dừng trong app hỗ trợ phím media của Windows (Spotify, trình duyệt…). macOS và Linux chưa hỗ trợ.'],
+      ['CI không hiện', 'Kiểm tra tên repo và mạng. Repo riêng tư cần cài GitHub CLI và đã chạy gh auth login. ADB Kit hỏi GitHub 2 phút một lần.'],
+      ['Trang báo mất kết nối', 'Kiểm tra dây USB và ADB Kit còn bật bảng theo dõi. Cắm lại dây thì trang tự hiện lại.'],
+      ['Màn hình vẫn tự tắt', 'Một số trình duyệt cũ không hỗ trợ giữ màn hình sáng. Dùng Chrome bản mới và chạm vào trang một lần.']
+    ],
+    tips: ['Máy cũ cắm sạc và sáng màn hình cả ngày dễ nóng và chai pin: nên giảm độ sáng trang và tắt bảng khi rời bàn.'],
+    tour: [
+      { target: tool('desk'), panel: 'desk', title: 'Bảng theo dõi', body: 'Biến điện thoại đang cắm thành màn hình phụ hiện thông tin máy tính.' },
+      { target: '.dk-body', panel: 'desk', title: 'Hai bước', body: 'Chọn thông tin → bật lên điện thoại.' }
     ]
   },
 

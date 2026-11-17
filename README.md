@@ -148,6 +148,20 @@ Tab **Mạng / API** › **Giả lập & phát lại** › **Bắt qua proxy**. 
 - **Trả lại thiết lập:** giá trị proxy cũ của máy được ghi ra đĩa trước khi đổi và trả lại khi tắt proxy, khi rời tab / đổi máy, khi đóng ADB Kit, khi điện thoại rút ra cắm lại, và ở lần mở ADB Kit kế tiếp nếu app bị tắt đột ngột. Nếu máy vẫn mất mạng: `adb shell settings put global http_proxy :0`.
 - **Giới hạn:** chưa giả lập lỗi API qua proxy; HTTP/2 được hạ về HTTP/1.1 khi giải mã; app tự bỏ qua proxy hệ thống (một số app Flutter, game) sẽ không xuất hiện.
 
+## Bảng theo dõi (điện thoại làm màn hình phụ)
+
+Tab **Bảng theo dõi**. Lúc điện thoại cắm dây mà không test, điện thoại hiện thông tin của máy tính: đồng hồ, CPU, RAM, GPU, tốc độ mạng, pin laptop, nhạc đang phát, trạng thái build CI và token AI.
+
+- **Cách chạy:** ADB Kit phục vụ một trang trên `127.0.0.1` (kèm khóa ngẫu nhiên trong địa chỉ) và nối sang điện thoại bằng `adb reverse`. Không đổi cài đặt nào của điện thoại.
+- **Hai cách hiện:** *App của ADB Kit* (mặc định) — lần bật đầu, ADB Kit cài `resources/adbkit-desk.apk` (khoảng 25 KB, chỉ xin quyền mạng, chỉ mở địa chỉ `http://127.0.0.1:…`) rồi mở toàn màn hình; nút *Gỡ app khỏi điện thoại* gỡ nó đi. *Trình duyệt* — không cài gì, trang mở trong trình duyệt của máy và ADB Kit chạm một lần vào giữa màn hình để vào toàn màn hình.
+- **Build lại app:** mã nguồn ở `android/desk` (một Activity Java, không Gradle). `node android/desk/build.cjs` cần `ANDROID_HOME` và JDK; khóa ký được tạo ở `~/.adbkit/desk.keystore` và không nằm trong repo. Đổi mã thì tăng `versionCode` trong manifest và trong `src/shared/desk.ts`.
+- **GPU, mạng, pin, nhạc:** trên Windows, một script PowerShell chỉ đọc (`resources/desk-helper.ps1`) in ra mỗi 2 giây: % GPU, bộ đếm byte của card mạng vật lý, pin, và bài đang phát (giao diện media của Windows). Script tự dừng khi ADB Kit tắt. Linux có tốc độ mạng và pin (`/proc/net/dev`, `/sys/class/power_supply`); macOS chưa có các ô này. Thứ gì máy không có thì ô tự ẩn.
+- **Build CI:** nhập `chủ/repo`; ADB Kit lấy lần chạy GitHub Actions mới nhất 2 phút một lần, qua GitHub CLI (`gh`) nếu có — nhờ đó repo riêng tư dùng được — hoặc API công khai. Chỉ tên repo được gửi đi.
+- **Chỉ hiển thị:** trang không gửi lệnh nào về máy tính; máy chủ chỉ trả lời yêu cầu đọc.
+- **Token AI:** mỗi công cụ một dòng, cho hôm nay và 5 giờ qua: Claude Code (`~/.claude/projects`) và Antigravity/Gemini (`~/.gemini/antigravity/brain/*/.system_generated/logs/transcript.jsonl`). Công cụ chưa từng dùng trên máy thì không hiện. Chỉ cộng các con số token trong nhật ký trên máy này. Không lưu, không hiển thị nội dung hội thoại, không gửi gì ra ngoài. Đây là số đã dùng, không phải hạn mức còn lại của gói.
+- **Màn hình:** màn hình được giữ sáng, nội dung tự dịch nội dung vài điểm ảnh mỗi phút và có mức giảm sáng để đỡ lưu ảnh trên máy cũ.
+- **Tắt:** bấm *Tắt bảng theo dõi* hoặc đóng ADB Kit; trang trên máy báo mất kết nối. Rút dây rồi cắm lại thì đường nối được lập lại và trang tự hiện tiếp.
+
 ## So với Figma (đo kích thước, khoảng cách)
 
 Tab **So với Figma**: so một phần tử trên máy thật với node tương ứng trong thiết kế Figma, theo dp.
