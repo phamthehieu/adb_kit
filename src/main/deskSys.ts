@@ -42,9 +42,10 @@ export class SysWatcher {
       if (!this.helper || !existsSync(this.helper)) return
       const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.helper, '-ParentId', String(process.pid)], {
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'ignore']
+        stdio: ['pipe', 'pipe', 'ignore']
       })
       this.child = child
+      child.stdin?.on('error', () => {})
       let buf = ''
       child.stdout?.setEncoding('utf8')
       child.stdout?.on('data', (chunk: string) => {
@@ -76,8 +77,24 @@ export class SysWatcher {
     }
   }
 
+  /**
+   * Ask the helper to press a media button on the player it is showing. False when there is no
+   * helper to ask (the caller then falls back to a media key).
+   */
+  media(action: MediaAction): boolean {
+    const stdin = this.child?.stdin
+    if (!stdin || !stdin.writable) return false
+    stdin.write(action + '\n')
+    return true
+  }
+
   private take(s: SysSample): void {
     const now = Date.now()
+    if (s.mediaOnly) {
+      this.sample = { ...this.sample, media: s.media }
+      this.at = now
+      return
+    }
     if (s.net) {
       this.rate = this.lastNet ? netRate(this.lastNet.c, s.net, now - this.lastNet.t) : undefined
       this.lastNet = { c: s.net, t: now }
@@ -104,5 +121,33 @@ export class SysWatcher {
     this.at = 0
     this.lastNet = null
     this.rate = undefined
+  }
+}
+
+export type MediaAction = 'prev' | 'toggle' | 'next'
+
+const WIN_MEDIA_VK: Record<MediaAction, number> = {
+  prev: 0xb1, // VK_MEDIA_PREV_TRACK
+  toggle: 0xb3, // VK_MEDIA_PLAY_PAUSE
+  next: 0xb0 // VK_MEDIA_NEXT_TRACK
+}
+
+/**
+ * Press a system media key on the host PC. Fallback for when the helper is not running: it starts
+ * a new PowerShell each time (slow) and cannot tell which player gets the key.
+ */
+export function sendMediaKey(action: MediaAction): void {
+  if (process.platform === 'win32') {
+    const vk = WIN_MEDIA_VK[action]
+    const ps = `Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class MK { [DllImport("user32.dll")] public static extern void keybd_event(byte v, byte s, int f, int e); }'; [MK]::keybd_event(${vk},0,1,0); [MK]::keybd_event(${vk},0,3,0)`
+    const c = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      windowsHide: true,
+      stdio: 'ignore'
+    })
+    c.on('error', () => {})
+  } else if (process.platform === 'linux') {
+    const cmd = action === 'prev' ? 'previous' : action === 'next' ? 'next' : 'play-pause'
+    const c = spawn('playerctl', [cmd], { stdio: 'ignore' })
+    c.on('error', () => {})
   }
 }

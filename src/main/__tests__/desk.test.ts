@@ -2,9 +2,11 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { get } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Script } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AiSources, AiUsageReader } from '../aiUsage'
 import { DeskServer } from '../desk'
+import { deskPageHtml } from '../deskPage'
 import { DEFAULT_DESK, type DeskSnapshot } from '../../shared/desk'
 
 const fetchText = (url: string): Promise<{ status: number; type: string; body: string }> =>
@@ -68,6 +70,13 @@ describe('DeskServer', () => {
     const port = await server.start()
     const res = await fetch(`http://127.0.0.1:${port}/?k=${server.key}`, { method: 'POST', body: 'x' })
     expect(res.status).toBe(403)
+  })
+
+  it('generates valid inline JS in deskPageHtml()', () => {
+    const html = deskPageHtml()
+    const m = /<script>([\s\S]*)<\/script>/.exec(html)
+    expect(m).not.toBeNull()
+    expect(() => new Script(m![1])).not.toThrow()
   })
 })
 

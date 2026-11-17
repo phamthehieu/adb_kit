@@ -131,6 +131,10 @@ describe('helper output', () => {
     expect(parseSysLine('{}')).toEqual({})
     expect(parseSysLine('{"net":{"rx":"1","tx":2},"gpu":{"name":"X"},"battery":null,"media":{"title":""}}')).toEqual({})
     expect(parseSysLine('{"media":{"title":"T","position":-3}}')).toEqual({ media: { title: 'T', artist: '', playing: false, position: 0, duration: 0 } })
+    expect(parseSysLine('{"only":"media","media":{"title":"T","playing":true,"canPrev":false,"canNext":true}}')).toEqual({
+      mediaOnly: true,
+      media: { title: 'T', artist: '', playing: true, position: 0, duration: 0, canPrev: false, canNext: true }
+    })
     expect(parseSysLine('WARNING: something')).toBeNull()
     expect(parseSysLine('[1,2]')).toEqual({})
   })

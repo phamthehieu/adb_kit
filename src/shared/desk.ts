@@ -146,6 +146,9 @@ export interface Media {
   /** Seconds; 0 when the player does not say. */
   position: number
   duration: number
+  /** False when the player refuses "previous" / "next" (a single video, a live stream); unset when unknown. */
+  canPrev?: boolean
+  canNext?: boolean
 }
 export type CiState = 'success' | 'failure' | 'running' | 'queued' | 'cancelled' | 'other'
 export interface CiRun {
@@ -171,6 +174,8 @@ export interface SysSample {
   gpu?: GpuLoad
   battery?: Battery
   media?: Media
+  /** The line only refreshes `media` (sent right after a media button); the other readings stay as they were. */
+  mediaOnly?: boolean
 }
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -202,7 +207,10 @@ export function parseSysLine(line: string): SysSample | null {
       position: finite(m.position) && m.position > 0 ? m.position : 0,
       duration: finite(m.duration) && m.duration > 0 ? m.duration : 0
     }
+    if (typeof m.canPrev === 'boolean') out.media.canPrev = m.canPrev
+    if (typeof m.canNext === 'boolean') out.media.canNext = m.canNext
   }
+  if (o.only === 'media') out.mediaOnly = true
   return out
 }
 

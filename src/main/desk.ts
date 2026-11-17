@@ -9,7 +9,7 @@ import { cpus, freemem, hostname, totalmem } from 'node:os'
 import { adb, q, shell } from './adb'
 import { AiSources } from './aiUsage'
 import { CiWatcher } from './deskCi'
-import { SysWatcher } from './deskSys'
+import { sendMediaKey, SysWatcher, type MediaAction } from './deskSys'
 import { deskPageHtml } from './deskPage'
 import { existsSync } from 'node:fs'
 import { DESK_APP, cpuPercent, installedVersion, normalizeDesk, screenCenter, type AiSourceUsage, type CpuTimes, type DeskConfig, type DeskSnapshot, type DeskStatus, type DeskVia } from '../shared/desk'
@@ -33,6 +33,8 @@ export class DeskServer {
   private clients = new Set<ServerResponse>()
   private last = ''
 
+  constructor(private readonly onMedia?: (action: MediaAction) => void) {}
+
   get viewers(): number {
     return this.clients.size
   }
@@ -46,6 +48,16 @@ export class DeskServer {
       }
       if (url.pathname === '/') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(deskPageHtml())
+        return
+      }
+      if (url.pathname === '/media') {
+        const act = url.searchParams.get('action')
+        if (act === 'prev' || act === 'toggle' || act === 'next') {
+          this.onMedia?.(act)
+          res.writeHead(204, { 'cache-control': 'no-store' }).end()
+        } else {
+          res.writeHead(400).end('bad action')
+        }
         return
       }
       if (url.pathname === '/events') {
@@ -169,7 +181,9 @@ function sample(a: Active, reader: AiSources, state: { prev: CpuTimes; ai?: AiSo
 export async function startDesk(serial: string, config: Partial<DeskConfig>): Promise<DeskStatus> {
   await stopDesk()
   const cfg = normalizeDesk(config)
-  const server = new DeskServer()
+  const server = new DeskServer((act) => {
+    if (!active?.sys.media(act)) sendMediaKey(act)
+  })
   const port = await server.start()
   try {
     const rev = await adb(['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`], 8000)

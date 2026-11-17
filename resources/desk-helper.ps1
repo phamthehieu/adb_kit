@@ -1,6 +1,7 @@
 # ADB Kit desk board (keep this file ASCII: Windows PowerShell reads it as ANSI): prints one JSON line every two seconds with what Node cannot read by
 # itself on Windows: network counters, GPU load, battery and the track that is playing.
-# Read-only. Stops by itself when ADB Kit (the parent process) is gone.
+# Read-only, except for the media buttons: a line "prev", "toggle" or "next" on stdin is passed to
+# the player that is shown. Stops by itself when ADB Kit (the parent process) is gone.
 #   powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File desk-helper.ps1 -ParentId <pid> -Want net,gpu,battery,media
 param([int]$ParentId = 0, [string]$Want = 'net,gpu,battery,media')
 
@@ -31,7 +32,50 @@ if ($parts -contains 'media') {
   } catch { $mgr = $null }
 }
 
-while ($true) {
+function MediaInfo {
+  $s = $mgr.GetCurrentSession()
+  if (-not $s) { return $null }
+  $p = Await ($s.TryGetMediaPropertiesAsync()) $propType
+  $info = $s.GetPlaybackInfo()
+  $playing = ([int]$info.PlaybackStatus -eq 4)
+  $tl = $s.GetTimelineProperties()
+  $dur = $tl.EndTime.TotalSeconds
+  $pos = $tl.Position.TotalSeconds
+  if ($playing) {
+    $since = ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds
+    if ($since -gt 0 -and $since -lt 86400) { $pos += $since }
+  }
+  if ($dur -gt 0 -and $pos -gt $dur) { $pos = $dur }
+  if (-not ($p -and $p.Title)) { return $null }
+  return @{
+    title = [string]$p.Title; artist = [string]$p.Artist; playing = $playing
+    position = [Math]::Round($pos, 1); duration = [Math]::Round($dur, 1)
+    canPrev = [bool]$info.Controls.IsPreviousEnabled; canNext = [bool]$info.Controls.IsNextEnabled
+  }
+}
+
+# Press a button of the player that is shown (not a global media key, which may reach another app).
+function MediaDo($act) {
+  $s = $mgr.GetCurrentSession()
+  if (-not $s) { return }
+  $op = $null
+  if ($act -eq 'toggle') { $op = $s.TryTogglePlayPauseAsync() }
+  elseif ($act -eq 'next') { $op = $s.TrySkipNextAsync() }
+  elseif ($act -eq 'prev') { $op = $s.TrySkipPreviousAsync() }
+  if ($op) { [void](Await $op ([bool])) }
+}
+
+function Emit($o) {
+  [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress -Depth 4))
+  [Console]::Out.Flush()
+}
+
+# Commands from ADB Kit. Console.In would block here, a reader on the raw stream does not.
+$stdin = New-Object System.IO.StreamReader([Console]::OpenStandardInput())
+$pending = $stdin.ReadLineAsync()
+$closed = $false
+
+while (-not $closed) {
   if ($ParentId -and -not (Get-Process -Id $ParentId)) { break }
   $o = @{}
 
@@ -63,26 +107,32 @@ while ($true) {
 
   if ($mgr) {
     try {
-      $s = $mgr.GetCurrentSession()
-      if ($s) {
-        $p = Await ($s.TryGetMediaPropertiesAsync()) $propType
-        $playing = ([int]$s.GetPlaybackInfo().PlaybackStatus -eq 4)
-        $tl = $s.GetTimelineProperties()
-        $dur = $tl.EndTime.TotalSeconds
-        $pos = $tl.Position.TotalSeconds
-        if ($playing) {
-          $since = ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds
-          if ($since -gt 0 -and $since -lt 86400) { $pos += $since }
-        }
-        if ($dur -gt 0 -and $pos -gt $dur) { $pos = $dur }
-        if ($p -and $p.Title) {
-          $o.media = @{ title = [string]$p.Title; artist = [string]$p.Artist; playing = $playing; position = [Math]::Round($pos, 1); duration = [Math]::Round($dur, 1) }
-        }
-      }
+      $m = MediaInfo
+      if ($m) { $o.media = $m }
     } catch {}
   }
 
-  [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress -Depth 4))
-  [Console]::Out.Flush()
-  Start-Sleep -Milliseconds 2000
+  Emit $o
+
+  # Wait two seconds, answering media buttons at once instead of at the next reading.
+  $until = [DateTime]::UtcNow.AddMilliseconds(2000)
+  while ([DateTime]::UtcNow -lt $until) {
+    if ($pending.IsCompleted) {
+      $cmd = $pending.Result
+      if ($null -eq $cmd) { $closed = $true; break } # stdin closed: ADB Kit is gone
+      $pending = $stdin.ReadLineAsync()
+      $cmd = $cmd.Trim()
+      if ($mgr -and @('prev', 'toggle', 'next') -contains $cmd) {
+        try {
+          MediaDo $cmd
+          Start-Sleep -Milliseconds 250 # the player needs a moment to report its new state
+          $only = @{ only = 'media' }
+          $m = MediaInfo
+          if ($m) { $only.media = $m }
+          Emit $only
+        } catch {}
+      }
+    }
+    Start-Sleep -Milliseconds 100
+  }
 }
