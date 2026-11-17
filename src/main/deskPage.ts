@@ -199,7 +199,9 @@ function spark(id, floor, ease) {
   g.clearRect(0, 0, w, h)
   if (a.length < 2) return
   var targetTop = Math.max(floor, Math.max.apply(null, a) * 1.15)
-  sparkTop[id] += (targetTop - sparkTop[id]) * (ease || 0.16)
+  var k = typeof ease === 'number' && Number.isFinite(ease) ? ease : 0.16
+  if (!Number.isFinite(sparkTop[id])) sparkTop[id] = targetTop
+  sparkTop[id] += (targetTop - sparkTop[id]) * k
   var top = sparkTop[id]
   var slide = sparkSlide[id]
   var stepX = w / 59
@@ -434,7 +436,7 @@ setInterval(function () {
   var x = Math.round(Math.random() * 8 - 4), y = Math.round(Math.random() * 8 - 4)
   $('root').style.transform = 'translate(' + x + 'px,' + y + 'px)'
 }, 60000)
-window.addEventListener('resize', sparks)
+window.addEventListener('resize', function () { sparks() })
 `
 
 export function deskPageHtml(): string {
