@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppWindow, BellRing, Bot, Bug, Eye, FlaskConical, Gauge, Hammer, MonitorSmartphone, Database, FileText, HelpCircle, ScanEye, TriangleAlert, X, FolderTree, Network, Ruler, ScrollText, ShieldCheck, SquareTerminal, Smartphone, Unplug, Wifi } from 'lucide-react'
 import type { DeviceDetails, DeviceInfo, InstallFlags, MirrorOptions } from '@shared/types'
 import { TopBar } from './components/TopBar'
@@ -258,6 +258,39 @@ export function App() {
     setSimple(next)
     if (next && panel !== 'none' && !SIMPLE_PANELS.includes(panel)) go('none')
   }
+  // The toolbar always stays on one row. It shows as much as fits: 0 = group captions + names,
+  // 1 = names, 2 = icons (only the open tool keeps its name). Widths are measured, not guessed,
+  // so it adapts to any window size and to simple mode.
+  const barRef = useRef<HTMLDivElement>(null)
+  const [barLv, setBarLv] = useState(0)
+  const barFit = useRef<{ key: boolean; need: number[] }>({ key: simple, need: [] })
+  useLayoutEffect(() => {
+    const el = barRef.current
+    const last = el?.lastElementChild
+    if (!el || !last) return
+    if (barFit.current.key !== simple) {
+      barFit.current = { key: simple, need: [] }
+      if (barLv !== 0) {
+        setBarLv(0)
+        return
+      }
+    }
+    const need = Math.ceil(last.getBoundingClientRect().right - el.getBoundingClientRect().left) + 12
+    barFit.current.need[barLv] = need
+    if (need > el.clientWidth && barLv < 2) setBarLv(barLv + 1)
+  }, [barLv, simple])
+  useEffect(() => {
+    const el = barRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth
+      const n = barFit.current.need
+      // An unmeasured level is tried; the layout effect above steps back up if it does not fit.
+      setBarLv(n[0] === undefined || n[0] <= w ? 0 : n[1] === undefined || n[1] <= w ? 1 : 2)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const tool = (p: Panel, icon: React.ReactNode, label: string) =>
     simple && !SIMPLE_PANELS.includes(p) ? null : (
     <button className={`iconbtn ${panel === p ? 'on' : ''}`} onClick={toggle(p)} disabled={!ready} data-tour={`tool-${p}`} title={FRAMES[p]?.desc ? `${label} — ${FRAMES[p]!.desc}` : label} aria-pressed={panel === p}>
@@ -330,11 +363,14 @@ export function App() {
                 <Unplug size={14} /> <span className="tl">Ngắt kết nối</span>
               </button>
             )}
+            <button className="iconbtn bug-btn" data-tour="bug" disabled={!ready} onClick={() => setBugOpen(true)} title="Báo lỗi ngay: lưu ảnh, video vừa rồi, log, API và các thao tác (F8)">
+              <Bug size={14} /> Báo lỗi <kbd>F8</kbd>
+            </button>
           </>
         }
       />
 
-      <div className="toolbar" role="toolbar" aria-label="Công cụ">
+      <div className={`toolbar lv${barLv}`} ref={barRef} role="toolbar" aria-label="Công cụ">
         <div className="tgroup" role="group" aria-label="Điện thoại">
           <span className="tg-cap">Điện thoại</span>
           {tool('files', <FolderTree size={14} />, 'Tệp')}
@@ -368,10 +404,6 @@ export function App() {
           {tool('check', <ScanEye size={14} />, 'Soát UI')}
           {tool('figma', <Ruler size={14} />, 'Figma')}
         </div>
-        <span className="spacer" />
-        <button className="iconbtn bug-btn" data-tour="bug" disabled={!ready} onClick={() => setBugOpen(true)} title="Báo lỗi ngay: lưu ảnh, video vừa rồi, log, API và các thao tác (F8)">
-          <Bug size={14} /> Báo lỗi <kbd>F8</kbd>
-        </button>
       </div>
 
       <div className="workspace">
