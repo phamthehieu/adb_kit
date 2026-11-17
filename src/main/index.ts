@@ -1007,6 +1007,8 @@ function createWindow(): void {
     backgroundColor: '#0b0d10',
     autoHideMenuBar: true,
     title: 'ADB Kit',
+    // Window / taskbar icon (the installed .exe carries the same icon; macOS ignores this).
+    icon: join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

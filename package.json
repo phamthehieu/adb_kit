@@ -1,6 +1,6 @@
 {
   "name": "adb-kit",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "description": "Desktop tool to mirror, control and debug Android devices over ADB",
   "main": "./out/main/index.js",
   "private": true,
@@ -38,7 +38,8 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "resources/icon.ico"
     },
     "mac": {
       "target": [
@@ -69,6 +70,7 @@
         "AppImage",
         "deb"
       ],
+      "icon": "resources/icon.png",
       "category": "Development"
     }
   },
