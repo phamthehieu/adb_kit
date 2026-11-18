@@ -1,0 +1,54 @@
+name: Build test (no release)
+
+# Run by hand from the Actions tab (or `gh workflow run build-test.yml -f target=mac`).
+# Builds the installers for one platform and keeps them as artifacts of the run: no tag, no
+# GitHub Release, so people who use ADB Kit are not told there is a new version.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Platform to build
+        type: choice
+        default: mac
+        options: [mac, win, linux]
+
+jobs:
+  build:
+    name: Build (${{ inputs.target }})
+    runs-on: ${{ inputs.target == 'mac' && 'macos-latest' || inputs.target == 'win' && 'windows-latest' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install system dependencies (Linux)
+        if: inputs.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools libfuse2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build and Package
+        run: npm run dist:${{ inputs.target }}
+
+      - name: Keep the installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: adb-kit-${{ inputs.target }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb

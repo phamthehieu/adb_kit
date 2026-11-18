@@ -14,10 +14,10 @@ const WIDGETS: { id: keyof DeskWidgets; label: string; hint: string }[] = [
   { id: 'clock', label: 'Đồng hồ', hint: 'Giờ và ngày, theo đồng hồ của điện thoại.' },
   { id: 'cpu', label: 'CPU', hint: 'Phần trăm CPU của máy tính và biểu đồ một phút gần nhất.' },
   { id: 'ram', label: 'RAM', hint: 'Bộ nhớ máy tính đang dùng trên tổng số.' },
-  { id: 'gpu', label: 'GPU', hint: 'Phần trăm card đồ họa đang dùng (hiện có trên Windows).' },
-  { id: 'net', label: 'Tốc độ mạng', hint: 'Tốc độ tải xuống và tải lên của máy tính (Windows, Linux).' },
+  { id: 'gpu', label: 'GPU', hint: 'Phần trăm card đồ họa đang dùng (Windows, macOS).' },
+  { id: 'net', label: 'Tốc độ mạng', hint: 'Tốc độ tải xuống và tải lên của máy tính.' },
   { id: 'battery', label: 'Pin laptop', hint: 'Phần trăm pin và trạng thái sạc. Máy bàn không có pin thì ô này tự ẩn.' },
-  { id: 'media', label: 'Nhạc đang phát', hint: 'Tên bài, ca sĩ và tiến độ của bài đang phát trên máy tính (Windows: Spotify, trình duyệt, YouTube Music…).' },
+  { id: 'media', label: 'Nhạc đang phát', hint: 'Tên bài, ca sĩ và tiến độ của bài đang phát trên máy tính (Windows: Spotify, trình duyệt, YouTube Music…; macOS: app Spotify và Music).' },
   { id: 'ci', label: 'Trạng thái build CI', hint: 'Lần chạy GitHub Actions mới nhất của repo bạn nhập bên dưới.' },
   { id: 'ai', label: 'Token AI', hint: 'Số token đã dùng hôm nay và trong 5 giờ qua của Claude Code và Antigravity (Gemini), đọc từ nhật ký của chúng trên máy này. Chỉ lấy con số, không đọc nội dung hội thoại.' }
 ]

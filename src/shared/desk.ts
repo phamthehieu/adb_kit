@@ -242,6 +242,67 @@ export function parseProcNetDev(text: string): NetCounters | null {
   return seen ? { rx, tx } : null
 }
 
+/**
+ * macOS: byte counters of the Ethernet / Wi-Fi adapters (en0, en1, ...) from `netstat -ib`. Only
+ * the "<Link#n>" row of each adapter counts (the others repeat it per address). The address
+ * column can be empty, so the numbers are read from the end of the row.
+ */
+export function parseNetstatIb(text: string): NetCounters | null {
+  let rx = 0
+  let tx = 0
+  let seen = false
+  for (const l of text.split('\n')) {
+    const f = l.trim().split(/\s+/)
+    if (f.length < 10 || !/^en\d+\*?$/.test(f[0]) || !f[2].startsWith('<Link#')) continue
+    const ib = Number(f[f.length - 5])
+    const ob = Number(f[f.length - 2])
+    if (!Number.isFinite(ib) || !Number.isFinite(ob)) continue
+    rx += ib
+    tx += ob
+    seen = true
+  }
+  return seen ? { rx, tx } : null
+}
+
+/** macOS: battery from `pmset -g batt`; undefined on a Mac without one. */
+export function parsePmsetBatt(text: string): Battery | undefined {
+  const m = /InternalBattery[^\n]*?(\d+)%;\s*([^;\n]*)/.exec(text)
+  if (!m) return undefined
+  const state = m[2].trim().toLowerCase()
+  return { level: Math.min(100, Math.max(0, Number(m[1]))), charging: state ? state !== 'discharging' : /AC Power/.test(text) }
+}
+
+/** macOS: GPU load from `ioreg -r -d 1 -w 0 -c IOAccelerator` (the busiest GPU when there are two). */
+export function parseIoregGpu(text: string): GpuLoad | undefined {
+  let load = -1
+  for (const m of text.matchAll(/"Device Utilization %"\s*=\s*(\d+)/g)) load = Math.max(load, Number(m[1]))
+  if (load < 0) return undefined
+  const name = /"model"\s*=\s*<?"([^"]+)"/.exec(text)?.[1] ?? ''
+  return { name, load: Math.min(100, load) }
+}
+
+/**
+ * macOS: one line printed by the player script (see deskMac.ts): title, artist, "true" when
+ * playing, position and duration in seconds, separated by tabs. AppleScript writes decimals with
+ * the comma of the user's language.
+ */
+export function parseMacMedia(line: string, durationUnit: 's' | 'ms'): Media | undefined {
+  const f = line.replace(/\r?\n$/, '').split('\t')
+  if (f.length < 5 || !f[0].trim()) return undefined
+  const num = (s: string): number => {
+    const n = Number(s.trim().replace(',', '.'))
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
+  const duration = durationUnit === 'ms' ? num(f[4]) / 1000 : num(f[4])
+  return {
+    title: f[0].trim().slice(0, 200),
+    artist: f[1].trim().slice(0, 200),
+    playing: f[2].trim() === 'true',
+    position: Math.round(Math.min(num(f[3]), duration || Infinity) * 10) / 10,
+    duration: Math.round(duration * 10) / 10
+  }
+}
+
 /** 2 300 → "2 KB/s", 1 300 000 → "1,2 MB/s". */
 export function fmtRate(bytesPerSec: number): string {
   const kb = bytesPerSec / 1024

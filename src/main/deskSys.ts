@@ -1,11 +1,12 @@
 // What Node cannot read by itself for "Bảng theo dõi": network speed, GPU load, battery and the
 // track that is playing. On Windows one small PowerShell helper (resources/desk-helper.ps1)
 // prints these every two seconds; on Linux the network counters and battery come from /proc and
-// /sys. Everything is read-only, and anything a platform cannot give is simply left out.
+// /sys; on macOS they come from netstat, pmset, ioreg and the players themselves (deskMac.ts). Everything is read-only, and anything a platform cannot give is simply left out.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { macMedia, readMac, type MacPlayer } from './deskMac'
 import { netRate, parseProcNetDev, parseSysLine, type Battery, type NetCounters, type NetRate, type SysSample } from '../shared/desk'
 
 /** A sample older than this is not shown (the helper died or is stuck). */
@@ -34,6 +35,8 @@ export class SysWatcher {
   private sample: SysSample = {}
   private at = 0
   private mediaAt = 0
+  /** macOS: the player the track on screen came from. */
+  private macPlayer: MacPlayer | null = null
   private lastNet: { c: NetCounters; t: number } | null = null
   private rate: NetRate | undefined
 
@@ -77,6 +80,25 @@ export class SysWatcher {
       }
       void tick()
       this.timer = setInterval(() => void tick(), 2000)
+    } else if (process.platform === 'darwin') {
+      let busy = false
+      const timer = setInterval(() => void tick(), 2000)
+      const tick = async (): Promise<void> => {
+        if (busy) return // a slow reading must not pile up
+        busy = true
+        try {
+          const { player, ...s } = await readMac()
+          if (this.timer !== timer) return // stopped meanwhile
+          if (player) this.macPlayer = player
+          this.take(s)
+        } catch {
+          /* next tick */
+        } finally {
+          busy = false
+        }
+      }
+      this.timer = timer
+      void tick()
     }
   }
 
@@ -85,6 +107,17 @@ export class SysWatcher {
    * helper to ask (the caller then falls back to a media key).
    */
   media(action: MediaAction): boolean {
+    if (process.platform === 'darwin') {
+      const app = this.macPlayer
+      const timer = this.timer
+      if (app)
+        void macMedia(app, action)
+          .then((media) => {
+            if (media && this.timer === timer) this.take({ mediaOnly: true, media })
+          })
+          .catch(() => {})
+      return true // macOS has no media key to fall back to
+    }
     const stdin = this.child?.stdin
     if (!stdin || !stdin.writable) return false
     stdin.write(action + '\n')
@@ -127,6 +160,7 @@ export class SysWatcher {
     this.sample = {}
     this.at = 0
     this.mediaAt = 0
+    this.macPlayer = null
     this.lastNet = null
     this.rate = undefined
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DEFAULT_DESK, DESK_APP, cpuPercent, fmtRate, fmtTokens, installedVersion, netRate, normalizeDesk, normalizeRepo, parseAntigravityLine, parseCiRuns, parseProcNetDev, parseSysLine, parseUsageLine, screenCenter, sumUsage, type UsageEvent } from '../desk'
+import { DEFAULT_DESK, DESK_APP, cpuPercent, fmtRate, fmtTokens, installedVersion, netRate, normalizeDesk, normalizeRepo, parseAntigravityLine, parseCiRuns, parseIoregGpu, parseMacMedia, parseNetstatIb, parsePmsetBatt, parseProcNetDev, parseSysLine, parseUsageLine, screenCenter, sumUsage, type UsageEvent } from '../desk'
 
 const line = (o: Record<string, unknown>): string => JSON.stringify(o)
 const reply = (over: Record<string, unknown> = {}, usage: Record<string, unknown> = {}): string =>
@@ -158,6 +158,39 @@ describe('network speed', () => {
     ].join('\n')
     expect(parseProcNetDev(text)).toEqual({ rx: 6000, tx: 900 })
     expect(parseProcNetDev('nothing here')).toBeNull()
+  })
+
+  it('reads macOS netstat -ib: only the link row of en adapters', () => {
+    const text = [
+      'Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll',
+      'lo0        16384 <Link#1>                        400000     0  999999999   400000     0  999999999     0',
+      'en0        1500  <Link#6>    a4:83:e7:00:00:01  1234567     0       6000   654321     0        900     0',
+      'en0        1500  192.168.1     192.168.1.5      1234567     -       6000   654321     -        900     -',
+      'en5        1500  <Link#9>                             10     0        500        5     0        100     0',
+      'utun0      1380  <Link#12>                            3     0       7777        3     0       7777     0'
+    ].join('\n')
+    expect(parseNetstatIb(text)).toEqual({ rx: 6500, tx: 1000 })
+    expect(parseNetstatIb('nothing here')).toBeNull()
+  })
+
+  it('reads the macOS battery', () => {
+    expect(parsePmsetBatt("Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234567)\t87%; discharging; 3:12 remaining present: true\n")).toEqual({ level: 87, charging: false })
+    expect(parsePmsetBatt("Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234567)\t100%; charged; 0:00 remaining present: true\n")).toEqual({ level: 100, charging: true })
+    expect(parsePmsetBatt("Now drawing from 'AC Power'\n")).toBeUndefined()
+  })
+
+  it('reads the macOS GPU load', () => {
+    const text = '+-o AGXAcceleratorG13X  <class AGXAcceleratorG13X>\n    {\n      "model" = "Apple M1 Pro"\n      "PerformanceStatistics" = {"Tiled Scene Bytes"=0,"Device Utilization %"=23,"Renderer Utilization %"=20}\n    }\n'
+    expect(parseIoregGpu(text)).toEqual({ name: 'Apple M1 Pro', load: 23 })
+    expect(parseIoregGpu('"PerformanceStatistics" = {"Device Utilization %"=4}\n"PerformanceStatistics" = {"Device Utilization %"=61}')).toEqual({ name: '', load: 61 })
+    expect(parseIoregGpu('')).toBeUndefined()
+  })
+
+  it('reads the macOS player line', () => {
+    expect(parseMacMedia('Âm Thầm Bên Em\tSơn Tùng M-TP\ttrue\t67,5\t293226\n', 'ms')).toEqual({ title: 'Âm Thầm Bên Em', artist: 'Sơn Tùng M-TP', playing: true, position: 67.5, duration: 293.2 })
+    expect(parseMacMedia('T\t\tfalse\t12.25\t200.5\n', 's')).toEqual({ title: 'T', artist: '', playing: false, position: 12.3, duration: 200.5 })
+    expect(parseMacMedia('\n', 's')).toBeUndefined()
+    expect(parseMacMedia('', 'ms')).toBeUndefined()
   })
 
   it('formats speeds', () => {
