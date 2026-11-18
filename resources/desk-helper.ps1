@@ -16,6 +16,7 @@ if ($parts -contains 'gpu') {
 
 # The "now playing" information Windows keeps for the media keys (WinRT, Windows 10 1809+).
 $mgr = $null
+$mediaOk = $false
 if ($parts -contains 'media') {
   try {
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -28,12 +29,26 @@ if ($parts -contains 'media') {
     }
     $mgrType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
     $propType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties, Windows.Media.Control, ContentType = WindowsRuntime]
+    $mediaOk = $true
     $mgr = Await ($mgrType::RequestAsync()) $mgrType
   } catch { $mgr = $null }
 }
 
+# The player Windows would send the media keys to. The manager asked for at start can fail (slow
+# start) or keep saying "nothing" after a player opens later (a browser tab), so when it has no
+# session, ask Windows again.
+function CurrentSession {
+  $s = $null
+  if ($script:mgr) { $s = $script:mgr.GetCurrentSession() }
+  if (-not $s) {
+    try { $script:mgr = Await ($mgrType::RequestAsync()) $mgrType } catch { $script:mgr = $null }
+    if ($script:mgr) { $s = $script:mgr.GetCurrentSession() }
+  }
+  return $s
+}
+
 function MediaInfo {
-  $s = $mgr.GetCurrentSession()
+  $s = CurrentSession
   if (-not $s) { return $null }
   $p = Await ($s.TryGetMediaPropertiesAsync()) $propType
   $info = $s.GetPlaybackInfo()
@@ -56,7 +71,7 @@ function MediaInfo {
 
 # Press a button of the player that is shown (not a global media key, which may reach another app).
 function MediaDo($act) {
-  $s = $mgr.GetCurrentSession()
+  $s = CurrentSession
   if (-not $s) { return }
   $op = $null
   if ($act -eq 'toggle') { $op = $s.TryTogglePlayPauseAsync() }
@@ -105,7 +120,7 @@ while (-not $closed) {
     if ($b) { $o.battery = @{ level = [int]$b.EstimatedChargeRemaining; charging = ([int]$b.BatteryStatus -ne 1) } }
   }
 
-  if ($mgr) {
+  if ($mediaOk) {
     try {
       $m = MediaInfo
       if ($m) { $o.media = $m }
@@ -122,7 +137,7 @@ while (-not $closed) {
       if ($null -eq $cmd) { $closed = $true; break } # stdin closed: ADB Kit is gone
       $pending = $stdin.ReadLineAsync()
       $cmd = $cmd.Trim()
-      if ($mgr -and @('prev', 'toggle', 'next') -contains $cmd) {
+      if ($mediaOk -and @('prev', 'toggle', 'next') -contains $cmd) {
         try {
           MediaDo $cmd
           Start-Sleep -Milliseconds 250 # the player needs a moment to report its new state

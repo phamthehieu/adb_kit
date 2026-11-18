@@ -164,6 +164,12 @@ export function DeskPanel({ serial }: { serial: string }) {
               Tự vào toàn màn hình (ADB Kit chạm một lần vào giữa màn hình sau khi trang mở)
             </label>
           )}
+          {config.via === 'app' && (
+            <label className="mini-check" title="Khi bảng đã hiện, ADB Kit tắt màn hình điện thoại để máy khóa lại rồi bật lên. Bảng vẫn hiện phía trên màn hình khóa; muốn dùng thứ khác trên máy phải mở khóa. Các nút nhạc trên bảng vẫn bấm được khi máy đang khóa.">
+              <input type="checkbox" checked={config.lockPhone} disabled={here} onChange={(e) => setConfig((c) => ({ ...c, lockPhone: e.target.checked }))} />
+              Khóa điện thoại trong lúc hiện bảng (bảng hiện trên màn hình khóa)
+            </label>
+          )}
           <label className="mini-check" title="Khi đóng ADB Kit lúc bảng đang bật: đóng bảng trên điện thoại rồi tắt màn hình máy.">
             <input type="checkbox" checked={config.sleepOnQuit} onChange={(e) => setConfig((c) => ({ ...c, sleepOnQuit: e.target.checked }))} />
             Đóng ADB Kit thì tắt luôn màn hình điện thoại

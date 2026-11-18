@@ -105,7 +105,8 @@ describe('normalizeDesk', () => {
       dim: 30,
       autoFull: false,
       via: 'browser',
-      sleepOnQuit: false
+      sleepOnQuit: false,
+      lockPhone: false
     })
     expect(normalizeDesk({ dim: Number.NaN }).dim).toBe(100)
     expect(normalizeDesk({ via: 'telnet' as never }).via).toBe('app')

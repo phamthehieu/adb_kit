@@ -209,7 +209,25 @@ export async function startDesk(serial: string, config: Partial<DeskConfig>): Pr
   active = a
   sample(a, reader, state)
   if (a.via === 'browser' && a.config.autoFull) void enterFullScreen(a)
+  if (a.via === 'app' && a.config.lockPhone) void lockUnderBoard(a)
   return deskStatus()!
+}
+
+/**
+ * Lock the phone and leave the board showing on top of the lock screen: once the page is up, the
+ * screen is put to sleep (KEYCODE_SLEEP locks at once) and woken again (KEYCODE_WAKEUP). The
+ * viewer app is allowed over the lock screen, so it is what the phone shows when it wakes.
+ */
+async function lockUnderBoard(a: Active): Promise<void> {
+  for (let i = 0; i < 40 && active === a && !a.server.viewers; i++) await new Promise((r) => setTimeout(r, 250))
+  if (active !== a || !a.server.viewers) return
+  await shell(a.serial, 'input keyevent 223', 8000)
+  await new Promise((r) => setTimeout(r, 1200))
+  if (active !== a) return
+  await shell(a.serial, 'input keyevent 224', 8000)
+  // Some phones wake to the lock screen itself: bring the board back in front of it.
+  await new Promise((r) => setTimeout(r, 600))
+  if (active === a) await shell(a.serial, `am start -n ${DESK_APP.activity} --es url ${q(`http://127.0.0.1:${a.port}/?k=${a.server.key}`)}`, 10_000)
 }
 
 /**

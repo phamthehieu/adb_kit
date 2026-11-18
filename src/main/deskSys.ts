@@ -10,6 +10,8 @@ import { netRate, parseProcNetDev, parseSysLine, type Battery, type NetCounters,
 
 /** A sample older than this is not shown (the helper died or is stuck). */
 const STALE_MS = 10_000
+/** How long the last track stays on screen after the player stops reporting one. */
+const MEDIA_GRACE_MS = 6000
 
 async function linuxBattery(): Promise<Battery | undefined> {
   const base = '/sys/class/power_supply'
@@ -31,6 +33,7 @@ export class SysWatcher {
   private timer: NodeJS.Timeout | null = null
   private sample: SysSample = {}
   private at = 0
+  private mediaAt = 0
   private lastNet: { c: NetCounters; t: number } | null = null
   private rate: NetRate | undefined
 
@@ -90,6 +93,10 @@ export class SysWatcher {
 
   private take(s: SysSample): void {
     const now = Date.now()
+    // Between two tracks the player reports nothing for a moment: keep showing the last track
+    // instead of hiding the tile and bringing it back.
+    if (s.media) this.mediaAt = now
+    else if (this.sample.media && now - this.mediaAt < MEDIA_GRACE_MS) s.media = this.sample.media
     if (s.mediaOnly) {
       this.sample = { ...this.sample, media: s.media }
       this.at = now
@@ -119,6 +126,7 @@ export class SysWatcher {
     this.timer = null
     this.sample = {}
     this.at = 0
+    this.mediaAt = 0
     this.lastNet = null
     this.rate = undefined
   }

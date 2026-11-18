@@ -34,6 +34,11 @@ export interface DeskConfig {
   via: DeskVia
   /** When ADB Kit is closed while the board is on, also put the phone's screen to sleep. */
   sleepOnQuit: boolean
+  /**
+   * Viewer app only: once the board is up, lock the phone (screen off, then on again). The board
+   * stays visible on top of the lock screen; anything else on the phone asks for the PIN.
+   */
+  lockPhone: boolean
 }
 
 export type DeskVia = 'app' | 'browser'
@@ -44,7 +49,8 @@ export const DEFAULT_DESK: DeskConfig = {
   dim: 100,
   autoFull: true,
   via: 'app',
-  sleepOnQuit: true
+  sleepOnQuit: true,
+  lockPhone: false
 }
 
 /** "owner/repo" from what the user typed (a GitHub link works too), or '' when it is not one. */
@@ -58,7 +64,7 @@ export function normalizeRepo(text: unknown): string {
 }
 
 /** The viewer app bundled as resources/adbkit-desk.apk (built from android/desk). */
-export const DESK_APP = { pkg: 'dev.adbkit.desk', activity: 'dev.adbkit.desk/.MainActivity', versionCode: 3 }
+export const DESK_APP = { pkg: 'dev.adbkit.desk', activity: 'dev.adbkit.desk/.MainActivity', versionCode: 4 }
 
 /** versionCode of an installed package from `dumpsys package <pkg>`, or null when it is not installed. */
 export function installedVersion(dumpsys: string): number | null {
@@ -84,7 +90,8 @@ export function normalizeDesk(c: Partial<DeskConfig> | null | undefined): DeskCo
     dim: Number.isFinite(dim) ? Math.min(100, Math.max(30, Math.round(dim))) : DEFAULT_DESK.dim,
     autoFull: c?.autoFull ?? DEFAULT_DESK.autoFull,
     via: c?.via === 'browser' || c?.via === 'app' ? c.via : DEFAULT_DESK.via,
-    sleepOnQuit: c?.sleepOnQuit ?? DEFAULT_DESK.sleepOnQuit
+    sleepOnQuit: c?.sleepOnQuit ?? DEFAULT_DESK.sleepOnQuit,
+    lockPhone: c?.lockPhone === true
   }
 }
 

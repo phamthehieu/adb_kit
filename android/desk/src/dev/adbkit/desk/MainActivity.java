@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        showOverLockScreen();
 
         web = new WebView(this);
         web.setBackgroundColor(Color.BLACK);
@@ -81,6 +82,16 @@ public class MainActivity extends Activity {
         });
         setContentView(web);
         open(getIntent());
+    }
+
+    /**
+     * The board may be shown on top of the lock screen, so the phone can stay locked while it is
+     * on the desk. Nothing is unlocked: leaving the board still asks for the PIN.
+     */
+    @SuppressWarnings("deprecation")
+    private void showOverLockScreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) setShowWhenLocked(true);
+        else getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
     }
 
     @Override

@@ -50,6 +50,14 @@ html,body{height:100%;background:#000;color:#eef2f8;font-family:Roboto,system-ui
 #mprog{display:flex;flex-direction:column;gap:.6vmin}
 #mprog .bar{margin-top:0;height:1.3vmin}
 #mtime{font-size:2.6vmin;color:#6f7e99;display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
+#mtitle,#martist{transition:opacity .25s ease}
+#music.sw #mtitle{opacity:.4}
+#music.sw #martist{color:#5bf0a0;animation:blink 1.2s ease-in-out infinite}
+#music.sw .bar i{width:35%!important;transition:none;animation:slide 1.1s ease-in-out infinite}
+#music.sw #mtime{visibility:hidden}
+#music.sw #eq i{animation:eq .5s ease-in-out infinite}
+#music.sw #eq i:nth-child(2){animation-delay:-.3s}#music.sw #eq i:nth-child(3){animation-delay:-.15s}#music.sw #eq i:nth-child(4){animation-delay:-.4s}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
 #mctrls{display:flex;align-items:center;justify-content:center;gap:4.5vmin;padding-top:.4vmin}
 .mbtn{border:1px solid #24324d;background:#121b2e;color:#dbe4f3;border-radius:50%;width:9.5vmin;height:9.5vmin;display:grid;place-items:center;cursor:pointer;transition:transform .12s ease,background-color .18s ease,border-color .18s ease}
 .mbtn:active{transform:scale(.9)}
@@ -324,13 +332,17 @@ function show(m) {
     var playing = s.media.playing
     if (mediaHold && performance.now() < mediaHold.until && mediaHold.playing !== playing) playing = mediaHold.playing
     else mediaHold = null
-    $('martist').textContent = s.media.artist || (playing ? 'Đang phát' : 'Tạm dừng')
+    // After prev / next: show "switching" until the PC reports another track (or the same one from its start).
+    if (mediaSwitch && (performance.now() > mediaSwitch.until || s.media.title !== mediaSwitch.title || s.media.position < mediaSwitch.position - 2)) mediaSwitch = null
+    $('music').className = mediaSwitch ? 'tile sw' : 'tile'
+    $('martist').textContent = mediaSwitch ? 'Đang chuyển bài…' : s.media.artist || (playing ? 'Đang phát' : 'Tạm dừng')
     playIcon(playing)
     // A single video or a live stream has no previous / next: show those buttons as unavailable.
     $('mprev').disabled = s.media.canPrev === false
     $('mnext').disabled = s.media.canNext === false
+    lastMediaPos = s.media.position
     var has = s.media.duration > 0
-    $('mprog').hidden = !has
+    $('mprog').hidden = !has && !mediaSwitch
     if (has) {
       $('mbar').style.width = Math.min(100, (s.media.position / s.media.duration) * 100) + '%'
       $('mpos').textContent = mmss(s.media.position); $('mdur').textContent = mmss(s.media.duration)
@@ -392,6 +404,8 @@ function connect() {
   es.onerror = function () { online(false) }
 }
 var mediaHold = null
+var mediaSwitch = null
+var lastMediaPos = 0
 function playIcon(on) {
   $('eq').className = on ? 'on' : ''
   $('mplayico').innerHTML = on
@@ -405,6 +419,12 @@ function sendMedia(act) {
     var on = $('eq').className !== 'on'
     mediaHold = { playing: on, until: performance.now() + 4000 }
     playIcon(on)
+  } else {
+    // Show at once that the tap was taken; show() ends it when the new track arrives.
+    mediaSwitch = { title: $('mtitle').textContent, position: lastMediaPos, until: performance.now() + 6000 }
+    $('music').className = 'tile sw'
+    $('martist').textContent = 'Đang chuyển bài…'
+    $('mprog').hidden = false
   }
 }
 $('mprev').addEventListener('click', function (e) { e.stopPropagation(); sendMedia('prev') })
